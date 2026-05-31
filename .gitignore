@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+.vercel/
+.next/
+# 大体积原始抓取源(职位原始JSON/HTML)不入库；分片产物 data/ 才入库
+cli/raw/positions/*.json
+cli/raw/positions/*.html

@@ -1,0 +1,12 @@
+[
+  { "sector": "金融银行", "recruit_type": "campus", "window": "9月-11月", "note": "六大行/股份行秋招启动早,9月网申,10-11月笔试(行测类+性格测评),多委托第三方测评", "examples": ["工商银行", "建设银行", "中国银行", "农业银行"] },
+  { "sector": "金融银行", "recruit_type": "campus", "window": "次年3月-5月", "note": "银行春招(秋招补录为主),规模小于秋招", "examples": ["交通银行", "邮储银行"] },
+  { "sector": "电信运营", "recruit_type": "campus", "window": "9月-11月", "note": "三大运营商秋招,省公司/研究院分别招聘", "examples": ["中国移动", "中国电信", "中国联通"] },
+  { "sector": "油气化工", "recruit_type": "campus", "window": "9月-12月", "note": "三桶油秋招,地区公司+研究院;春招3月为补充高峰", "examples": ["中石油", "中石化", "中海油"] },
+  { "sector": "能源电力", "recruit_type": "campus", "window": "10月-11月(一批)、次年3-4月(二批)", "note": "国家电网/南方电网分两批校招,一批为主力,电气类对口;统一网申+机考", "examples": ["国家电网", "南方电网"] },
+  { "sector": "烟草", "recruit_type": "campus", "window": "次年1月-5月(各省滚动)", "note": "各省中烟工业公司/烟草专卖局分别发布,时间分散,需逐省盯公告", "examples": ["中国烟草"] },
+  { "sector": "建筑工程", "recruit_type": "campus", "window": "9月-11月", "note": "中建/中铁/中铁建各工程局、子公司大量招聘,土木/工程管理对口,体量大", "examples": ["中国建筑", "中国中铁", "中国铁建"] },
+  { "sector": "航空航天军工", "recruit_type": "campus", "window": "9月-12月", "note": "各研究院所招聘,看重政治面貌/政审,部分涉密岗三代政审", "examples": ["航天科技", "航天科工", "中核集团"] },
+  { "sector": "交通运输", "recruit_type": "campus", "window": "9月-12月", "note": "国铁集团各铁路局集团分别招聘,运输/机械/电气类对口", "examples": ["国铁集团"] },
+  { "sector": "其他", "recruit_type": "social", "window": "全年", "note": "国央企社招全年滚动,以国聘网/各企业官网公告为准;社招看重对口经验" }
+]
