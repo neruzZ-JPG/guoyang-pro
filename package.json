@@ -2,6 +2,15 @@
   "name": "guoyang-pro-web",
   "version": "0.2.0",
   "private": true,
+  "author": "neruzZ-JPG",
+  "homepage": "https://github.com/neruzZ-JPG/guoyang-pro#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neruzZ-JPG/guoyang-pro.git"
+  },
+  "bugs": {
+    "url": "https://github.com/neruzZ-JPG/guoyang-pro/issues"
+  },
   "type": "module",
   "scripts": {
     "dev": "next dev",
