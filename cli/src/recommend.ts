@@ -23,9 +23,10 @@ export type RecommendCandidate = Position & {
 };
 
 export type RecommendOutput = {
-  query: RecommendInput & { year: number };
+  query: RecommendInput;
   basis: string;
   evaluated: number;
+  excluded_unknown_tier: number;
   buckets: {
     "冲": RecommendCandidate[];
     "稳": RecommendCandidate[];
@@ -44,11 +45,18 @@ function eduBar(education: string): number {
 }
 
 function competitivenessOf(p: Position): number {
-  let c = TIER_HEAT[p.tier ?? "T2"] ?? 50;
-  c += eduBar(p.education);             // 学历门槛越高越卷
-  if (p.major && !p.major.includes("不限")) c += 3; // 限专业略增门槛
+  let c = TIER_HEAT[p.tier!]!;
+  c += requirementEduBar(p.education);  // 学历门槛越高越卷
+  if (p.major && !/不限|未标注|未知/.test(p.major)) c += 3; // 明确限专业才加分
   if (p.recruit_type === "campus") c += 2;
   return Math.max(0, Math.min(100, c));
+}
+
+function requirementEduBar(education: string): number {
+  if (/本科|学士/.test(education)) return 4;
+  if (/硕士|研究生/.test(education)) return 12;
+  if (/博士/.test(education)) return 20;
+  return 0;
 }
 
 function strengthOf(input: RecommendInput): number {
@@ -62,7 +70,7 @@ function strengthOf(input: RecommendInput): number {
   return Math.max(0, Math.min(100, s));
 }
 
-export function recommend(input: RecommendInput): RecommendOutput {
+export function recommend(input: RecommendInput, pool?: Position[]): RecommendOutput {
   const year = resolveYear(input.year);
   const filter: PositionFilter = {
     education: input.education,
@@ -71,7 +79,8 @@ export function recommend(input: RecommendInput): RecommendOutput {
     sector: input.sector,
     recruit_type: input.recruit_type,
   };
-  const candidates = filterPositions(loadYear(year), filter);
+  const filtered = filterPositions(pool ?? loadYear(year), filter);
+  const candidates = filtered.filter((p) => p.tier && p.tier in TIER_HEAT);
   const strength = strengthOf(input);
 
   const buckets: RecommendOutput["buckets"] = { "冲": [], "稳": [], "保": [], out: [] };
@@ -92,9 +101,10 @@ export function recommend(input: RecommendInput): RecommendOutput {
   buckets["保"].sort((a, b) => a.delta - b.delta);
 
   return {
-    query: { ...input, year },
-    basis: "竞争度为启发式估算(企业梯队+学历门槛+是否限专业),非官方录取数据;仅供分档参考。",
+    query: { ...input, year: input.year },
+    basis: "竞争度为启发式估算(已识别母集团梯队+学历门槛+是否限专业),非官方录取数据;未知梯队岗位不参与冲稳保分档。",
     evaluated: candidates.length,
+    excluded_unknown_tier: filtered.length - candidates.length,
     buckets,
   };
 }

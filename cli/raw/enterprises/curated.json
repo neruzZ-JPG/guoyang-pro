@@ -1,5 +1,6 @@
 {
- "source": "QA-curated v1.0(基于 recon 合并名录158家:核验修正 sector/tier/regulator + 补全 hq/aliases/recruit_site/ats;原始分片已并入,id 由 ingest 按名稳定生成)",
+ "source": "QA-curated v2.0(基于官方名录与公开资料整理158家;梯队/求职评价属于编辑性参考,不是官方评级)",
+ "sources": "https://www.sasac.gov.cn/n2588045/n27271785/n27271792/c14159097/content.html; https://www.mof.gov.cn/; https://www.nfra.gov.cn/; http://www.china-railway.com.cn/; http://www.tobacco.gov.cn/; https://zhaopin.tobacco.gov.cn/",
  "enterprises": [
   {
    "name": "国家开发银行",
@@ -127,6 +128,24 @@
     "交行",
     "交通银行",
     "BOCOM"
+   ]
+  },
+  {
+   "name": "招商银行股份有限公司",
+   "short": "招商银行",
+   "tier": "T1",
+   "sector": "金融银行",
+   "regulator": "其他",
+   "listed": "A+H上市(600036/03968)",
+   "notes": "全国性股份制商业银行。总行、分行、信用卡中心及金融科技岗位覆盖较广；梯队为编辑性求职热度参考。",
+   "source": "https://www.cmbchina.com/; https://career.cmbchina.com/",
+   "hq": "深圳",
+   "recruit_site": "https://career.cmbchina.com/",
+   "ats": "自建",
+   "aliases": [
+    "招行",
+    "招商银行",
+    "CMB"
    ]
   },
   {
@@ -2244,8 +2263,7 @@
    "hq": "北京",
    "aliases": [
     "中国国新",
-    "国新",
-    "Chengtong"
+    "国新"
    ]
   },
   {

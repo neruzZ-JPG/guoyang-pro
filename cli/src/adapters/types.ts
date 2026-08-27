@@ -10,7 +10,13 @@ export type FetchParams = {
   location?: string;     // 城市
   recruit_type?: RecruitType; // 校招/社招/实习
   enterprise?: string;   // 指定企业名/简称
-  limit?: number;        // 期望返回上限(适配器内部分页)
+  enterprise_id?: string; // 归一化企业 id（适配器通常无法直接下推）
+  tier?: string;
+  education?: string;
+  major?: string;
+  employment_type?: string;
+  limit?: number;        // 最终期望返回上限
+  scan_limit?: number;   // 每个源最多扫描的原始记录数；与最终 limit 分离
 };
 
 // 适配器返回的"半成品"岗位:必须有企业名+岗位名,其余字段尽量填。
@@ -24,6 +30,10 @@ export type FetchResult = {
   ok: boolean;
   source: string;         // 适配器 id
   total?: number;         // 该源命中总量(若已知)
+  scanned: number;        // 实际扫描的原始记录数
+  exhausted: boolean;     // 是否确认扫到源列表末尾
+  truncated: boolean;     // 是否因 scan_limit/timeout 提前停止
+  fetched_at: string;
   positions: RawPosition[];
   error?: string;
   note?: string;
@@ -35,5 +45,10 @@ export type SourceAdapter = {
   homepage: string;
   scopes: RecruitType[];  // 支持的招聘类型
   live: boolean;          // 是否已接通(false=占位/待逆向)
+  kind?: "official" | "aggregator"; // 一手企业官网或聚合公共平台
+  priority?: number;      // 跨源字段冲突时的来源优先级；官方一手源通常更高
+  coverage?: string;      // 企业/岗位范围说明
+  disabled_reason?: string;
+  quality?: string;       // 字段质量/覆盖边界的诚实披露
   fetch(params: FetchParams): Promise<FetchResult>;
 };

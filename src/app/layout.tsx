@@ -4,11 +4,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "guoyang.pro — 用 Claude Code 规划你的国央企求职",
   description:
-    "国央企求职工具(国企/央企)。名录 / 梯队 / 招聘日历随包静态发布、离线可查;在招岗位实时拉国聘等源——岗位像大厂一样每天开关,不预存。零依赖 CLI。",
+    "国央企求职 CLI。158 家参考名录离线可查，实时扫描国聘与 24365，披露来源、抓取时间、扫描边界和降级状态。",
   metadataBase: new URL("https://guoyang.ha7ch.com"),
   openGraph: {
     title: "guoyang.pro · 国央企 PRO",
-    description: "名录/梯队/日历随包发布,在招岗位实时拉取——用 Claude Code 规划国央企求职",
+    description: "可溯源名录、多源实时岗位、子公司归一化与覆盖状态披露",
     url: "https://guoyang.ha7ch.com",
   },
   keywords: [

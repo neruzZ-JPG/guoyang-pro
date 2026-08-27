@@ -43,6 +43,7 @@ export const RECRUIT_TYPES = {
   campus: "校园招聘",
   social: "社会招聘",
   intern: "实习",
+  unknown: "未标注",
 } as const;
 export type RecruitType = keyof typeof RECRUIT_TYPES;
 
@@ -53,8 +54,54 @@ export function resolveRecruitType(input?: string): RecruitType | undefined {
     "校招": "campus", "校园": "campus", "应届": "campus",
     "社招": "social", "社会": "social",
     "实习": "intern", "intern": "intern",
+    "未知": "unknown", "未标注": "unknown", "unknown": "unknown",
   };
   return m[input];
+}
+
+/** 从上游行业、企业名等文本中做保守的行业归一化；无法可靠判断时返回 undefined。 */
+export function inferSector(text?: string): Sector | undefined {
+  const t = (text ?? "").replace(/\s+/g, "");
+  if (!t) return undefined;
+  if (/基金会/.test(t)) return undefined;
+  const priorityRules: [RegExp, Sector][] = [
+    [/新能源汽车|新能源车|电动汽车/, "汽车制造"],
+    [/建筑材料|新型建材/, "建材机械"],
+    [/化学制药|生物制药|医药|医疗|健康/, "医药健康"],
+  ];
+  const priority = priorityRules.find(([re]) => re.test(t));
+  if (priority) return priority[1];
+  const rules: [RegExp, Sector][] = [
+    [/烟草|中烟/, "烟草"],
+    [/银行|农信|信用社/, "金融银行"],
+    [/证券|保险|信托|产业基金|投资基金|基金管理|资产管理|金融控股|投资银行/, "证券保险"],
+    [/电网|电力|发电|水电|核电|风电|光伏|新能源|能源投资/, "能源电力"],
+    [/石油|石化|油气|煤化工|化工产业|化工集团/, "油气化工"],
+    [/移动通信|电信|联通|通信运营|信息通信/, "电信运营"],
+    [/航天|航空工业|航空发动机|兵器|军工|船舶|雷达|导弹/, "航空航天军工"],
+    [/铁路|轨道交通|航空运输|机场|港口|航运|物流运输|高速公路/, "交通运输"],
+    [/建筑|施工|工程建设|基础设施建设|勘察设计/, "建筑工程"],
+    [/汽车|整车|乘用车|商用车/, "汽车制造"],
+    [/钢铁|有色|矿业|金属冶炼/, "钢铁有色"],
+    [/粮食|农业|农垦|种业|食品/, "农业粮食"],
+    [/传媒|出版|文化|影视|广播电视/, "传媒文化"],
+    [/软件|互联网|大数据|人工智能|电子信息|数字科技|计算机/, "科技数字"],
+    [/机械|装备制造|建材|水泥/, "建材机械"],
+    [/商贸|贸易|供应链|仓储物流/, "商贸物流"],
+    [/城投|城市投资|城市建设投资/, "地方城投"],
+  ];
+  const matches = [...new Set(rules.filter(([re]) => re.test(t)).map(([, sector]) => sector))];
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+/** 上游未给可靠枚举时，只依据明确文字做保守推断。 */
+export function inferRecruitType(text?: string): RecruitType {
+  const t = text ?? "";
+  const matches: RecruitType[] = [];
+  if (/实习|intern/i.test(t)) matches.push("intern");
+  if (/校园招聘|校招|应届|毕业生|管培生|春招|秋招/.test(t)) matches.push("campus");
+  if (/社会招聘|社招|成熟人才/.test(t)) matches.push("social");
+  return matches.length === 1 ? matches[0] : "unknown";
 }
 
 // ── 用工性质(求职者最关心的"坑"之一) ──────────────────────────────
@@ -117,6 +164,13 @@ export type Position = {
   posted_at?: string;     // 发布时间
   apply_url?: string;     // 投递/详情链接
   source?: string;        // 数据来源 URL(溯源)
+  source_id?: string;     // 数据源稳定 id,如 iguopin/ncss
+  source_position_id?: string; // 数据源岗位 id
+  source_company_id?: string;  // 数据源企业 id
+  source_urls?: string[]; // 跨源合并后的全部溯源链接
+  fetched_at?: string;    // 实时抓取时间
+  match_confidence?: "exact" | "affiliate" | "inferred" | "none";
+  quality_warnings?: string[];
 };
 
 // ── 招聘时间线(日历) ───────────────────────────────────────────────

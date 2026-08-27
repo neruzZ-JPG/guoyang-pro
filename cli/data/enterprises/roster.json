@@ -1,11 +1,11 @@
 {
  "meta": {
-  "version": "0.1.0",
-  "built_at": "2026-05-31T19:19:41.433Z",
-  "total": 158,
+  "version": "0.2.0",
+  "built_at": "2026-08-27T07:56:51.769Z",
+  "total": 159,
   "by_tier": {
    "T0": 17,
-   "T1": 74,
+   "T1": 75,
    "T2": 54,
    "T3": 13
   },
@@ -14,9 +14,21 @@
    "国务院国资委": 100,
    "财政部": 27,
    "地方国资委": 14,
-   "国铁集团": 11
+   "国铁集团": 11,
+   "其他": 1
   },
-  "sources": []
+  "sources": [
+   "QA-curated v2.0(基于官方名录与公开资料整理158家;梯队/求职评价属于编辑性参考,不是官方评级)",
+   "https://www.sasac.gov.cn/n2588045/n27271785/n27271792/c14159097/content.html",
+   "https://www.mof.gov.cn/",
+   "https://www.nfra.gov.cn/",
+   "http://www.china-railway.com.cn/",
+   "http://www.tobacco.gov.cn/",
+   "https://zhaopin.tobacco.gov.cn/",
+   "financial",
+   "https://www.cmbchina.com/; https://career.cmbchina.com/",
+   "industrial"
+  ]
  },
  "enterprises": [
   {
@@ -1367,6 +1379,25 @@
    "source": "industrial"
   },
   {
+   "id": "e4ae2d1",
+   "name": "招商银行股份有限公司",
+   "short": "招商银行",
+   "tier": "T1",
+   "sector": "金融银行",
+   "regulator": "其他",
+   "listed": "A+H上市(600036/03968)",
+   "hq": "深圳",
+   "recruit_site": "https://career.cmbchina.com/",
+   "ats": "自建",
+   "aliases": [
+    "招行",
+    "招商银行",
+    "CMB"
+   ],
+   "notes": "全国性股份制商业银行。总行、分行、信用卡中心及金融科技岗位覆盖较广；梯队为编辑性求职热度参考。",
+   "source": "https://www.cmbchina.com/; https://career.cmbchina.com/"
+  },
+  {
    "id": "e6017eb",
    "name": "江苏交通控股有限公司",
    "short": "江苏交控",
@@ -1666,8 +1697,7 @@
    "hq": "北京",
    "aliases": [
     "中国国新",
-    "国新",
-    "Chengtong"
+    "国新"
    ],
    "notes": "两大国有资本运营公司之一,基金投资与央企资产整合平台。投资/金融属性强、平台高;金融/投资/会计/法律对口,北京总部。",
    "source": "industrial"

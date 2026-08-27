@@ -9,9 +9,10 @@
 import { request } from "node:https";
 import { gunzipSync, inflateSync, brotliDecompressSync } from "node:zlib";
 import type { SourceAdapter, FetchParams, FetchResult, RawPosition } from "./types.js";
-import type { RecruitType } from "../codes.js";
+import { inferSector, type RecruitType } from "../codes.js";
 
 const API = "https://gp-api.iguopin.com/api/jobs/v1/list";
+const TOTAL_TIMEOUT_MS = 20_000;
 
 function postJson(body: Record<string, unknown>, timeoutMs = 12000): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -32,8 +33,18 @@ function postJson(body: Record<string, unknown>, timeoutMs = 12000): Promise<any
       (res) => {
         const chunks: Buffer[] = [];
         res.on("data", (c: Buffer) => chunks.push(c));
+        res.on("error", (error) => {
+          clearTimeout(absoluteTimer);
+          reject(error);
+        });
         res.on("end", () => {
+          clearTimeout(absoluteTimer);
           try {
+            const status = res.statusCode ?? 0;
+            if (status < 200 || status >= 300) {
+              reject(new Error(`HTTP ${status}`));
+              return;
+            }
             let buf = Buffer.concat(chunks);
             const enc = res.headers["content-encoding"];
             if (enc === "gzip") buf = gunzipSync(buf);
@@ -45,8 +56,16 @@ function postJson(body: Record<string, unknown>, timeoutMs = 12000): Promise<any
         });
       },
     );
-    req.on("error", reject);
+    const absoluteTimer = setTimeout(
+      () => req.destroy(new Error("absolute timeout")),
+      timeoutMs,
+    );
+    req.on("error", (error) => {
+      clearTimeout(absoluteTimer);
+      reject(error);
+    });
     req.setTimeout(timeoutMs, () => req.destroy(new Error("timeout")));
+    req.once("close", () => clearTimeout(absoluteTimer));
     req.write(data);
     req.end();
   });
@@ -56,20 +75,37 @@ const RECRUIT_CODE: Record<RecruitType, string | null> = {
   campus: "1161T1j6",
   social: "115amZVP",
   intern: null, // 国聘无独立实习码,实习多并入校招;不单独过滤
+  unknown: null,
 };
 
 function recruitTypeOf(cn: string): RecruitType {
-  if (cn?.includes("校园") || cn?.includes("应届")) return "campus";
-  if (cn?.includes("实习")) return "intern";
-  return "social";
+  const matches: RecruitType[] = [];
+  if (cn?.includes("校园") || cn?.includes("校招") || cn?.includes("应届")) matches.push("campus");
+  if (cn?.includes("实习")) matches.push("intern");
+  if (cn?.includes("社会") || cn?.includes("社招")) matches.push("social");
+  return matches.length === 1 ? matches[0] : "unknown";
 }
 
-function salaryRef(rec: any): string {
-  if (rec.is_negotiable || (!rec.min_wage && !rec.max_wage)) return "面议";
-  const unit = rec.wage_unit_cn || "元/月";
+function salaryRef(rec: any): { value?: string; warning?: string } {
+  if (rec.is_negotiable === true) {
+    return { value: "面议(来源:国聘,仅供参考)" };
+  }
+  if (!rec.min_wage && !rec.max_wage) {
+    return { warning: "国聘未标注薪资，未将缺失值解释为面议" };
+  }
+  const unit = typeof rec.wage_unit_cn === "string" && rec.wage_unit_cn
+    ? rec.wage_unit_cn
+    : undefined;
   const months = rec.months ? `×${rec.months}个月` : "";
-  if (rec.min_wage && rec.max_wage) return `${rec.min_wage}-${rec.max_wage}${unit}${months}`;
-  return `${rec.min_wage || rec.max_wage}${unit}${months}`;
+  const range = rec.min_wage && rec.max_wage
+    ? `${rec.min_wage}-${rec.max_wage}`
+    : `${rec.min_wage || rec.max_wage}`;
+  return unit
+    ? { value: `${range}${unit}${months}(来源:国聘,仅供参考)` }
+    : {
+        value: `${range}${months}(单位未标注;来源:国聘,仅供参考)`,
+        warning: "国聘薪资单位未标注，未猜测单位",
+      };
 }
 
 function locationOf(rec: any): string {
@@ -80,45 +116,120 @@ function locationOf(rec: any): string {
   return rec.company_info?.district_list?.[0]?.area_cn || "";
 }
 
-function majorOf(rec: any): string {
+function majorOf(rec: any): string | undefined {
   const m = rec.major_cn;
   if (Array.isArray(m) && m.length) return m.join("、");
   if (typeof m === "string" && m) return m;
-  return "不限";
+  return undefined;
 }
 
 // 导出供离线 fixture 单测:把国聘一条原始记录映射为 RawPosition。
-export function parseRecord(rec: any): RawPosition {
+export function parseRecord(rec: any): RawPosition | null {
+  const sourcePositionId = String(rec.job_id ?? "");
+  const sourceUrl = sourcePositionId
+    ? `https://www.iguopin.com/job/detail?id=${sourcePositionId}`
+    : "https://www.iguopin.com/";
+  const industry = rec.company_info?.industry_cn || "";
+  const enterpriseName = String(rec.company_name || rec.company_info?.name || "").trim();
+  const title = String(rec.job_name || "").trim();
+  if (!sourcePositionId || !enterpriseName || !title) return null;
+  const recruitType = recruitTypeOf(rec.recruitment_type_cn);
+  const sector = inferSector(industry) || inferSector(enterpriseName);
+  const salary = salaryRef(rec);
+  const warnings: string[] = [];
+  if (sector && industry) warnings.push(`行业由国聘企业行业“${industry}”归一化`);
+  if (recruitType === "unknown") warnings.push("国聘招聘类型字段缺失或未知，本岗位标为 unknown");
+  if (salary.warning) warnings.push(salary.warning);
   return {
-    id: String(rec.job_id ?? ""),
-    enterprise_name: rec.company_name || rec.company_info?.name || "",
-    title: rec.job_name || "",
-    recruit_type: recruitTypeOf(rec.recruitment_type_cn),
+    id: sourcePositionId,
+    enterprise_name: enterpriseName,
+    title,
+    sector,
+    recruit_type: recruitType,
     work_location: locationOf(rec),
     headcount: Number(rec.amount) || 1,
     education: rec.education_cn || "",
     major: majorOf(rec),
-    salary_ref: salaryRef(rec),
+    salary_ref: salary.value,
     experience: rec.experience_cn || undefined,
     desc: typeof rec.contents === "string" ? rec.contents.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 600) : undefined,
-    // nature_cn=岗位用工性质;放入 remarks 供 live.ts 的 classifyEmployment 派生 employment_type
-    remarks: [rec.nature_cn, rec.company_info?.scale_cn].filter(Boolean).join(" | ") || undefined,
+    remarks: [
+      rec.nature_cn,
+      rec.company_info?.nature_cn ? `单位性质:${rec.company_info.nature_cn}` : "",
+      industry ? `行业:${industry}` : "",
+      rec.company_info?.scale_cn,
+    ].filter(Boolean).join(" | ") || undefined,
     deadline: rec.end_time || undefined,
     posted_at: rec.start_time || rec.create_time || undefined,
-    apply_url: rec.job_id ? `https://www.iguopin.com/job/detail?id=${rec.job_id}` : undefined,
-    source: rec.job_id ? `https://www.iguopin.com/job/detail?id=${rec.job_id}` : "https://www.iguopin.com/",
+    apply_url: sourcePositionId ? sourceUrl : undefined,
+    source: sourceUrl,
+    source_id: "iguopin",
+    source_position_id: sourcePositionId || undefined,
+    source_company_id: rec.company_id ? String(rec.company_id) : undefined,
+    quality_warnings: warnings.length ? warnings : undefined,
   };
+}
+
+const STATE_OWNED_CODES = new Set(["116wwMpd", "11AzDak"]);
+
+export function isStateOwnedRecord(rec: any): boolean {
+  const code = rec?.company_info?.nature;
+  return typeof code === "string" && STATE_OWNED_CODES.has(code);
+}
+
+export function responseError(json: any): string | undefined {
+  if (!json || typeof json !== "object") return "malformed response";
+  if (json.code !== 200) return `code=${json.code} msg=${json.msg}`;
+  if (!json.data || typeof json.data !== "object") return "missing response data";
+  if (!Array.isArray(json.data.list)) return "missing response list";
+  return undefined;
+}
+
+function includes(haystack: unknown, needle?: string): boolean {
+  return !needle || String(haystack ?? "").toLowerCase().includes(needle.toLowerCase());
+}
+
+function matchesSourceFilters(p: RawPosition, params: FetchParams): boolean {
+  if (!includes(p.enterprise_name, params.enterprise)) return false;
+  if (!includes(p.work_location, params.location)) return false;
+  if (params.recruit_type && p.recruit_type !== params.recruit_type) return false;
+  if (params.sector && p.sector !== params.sector) return false;
+  if (params.education && !includes(p.education, params.education)) return false;
+  if (params.major && !includes(p.major, params.major) && !includes(p.major, "不限")) return false;
+  if (params.keyword) {
+    const hay = [
+      p.enterprise_name, p.title, p.work_location, p.major, p.education,
+      p.desc, p.remarks,
+    ].filter(Boolean).join(" ");
+    if (!includes(hay, params.keyword)) return false;
+  }
+  return true;
 }
 
 const adapter: SourceAdapter = {
   id: "iguopin",
   name: "国聘网",
   homepage: "https://www.iguopin.com/",
-  scopes: ["campus", "social", "intern"],
+  scopes: ["campus", "social", "intern", "unknown"],
   live: true,
+  kind: "aggregator",
+  priority: 60,
+  coverage: "经国聘发布且单位性质代码明确为央企/国企的校园、社会、实习及未标注岗位。",
+  quality: "企业性质、招聘类型、地点、学历和薪资来自国聘列表；行业由企业行业字段保守归一化。",
   async fetch(params: FetchParams): Promise<FetchResult> {
-    const want = Math.max(1, Math.min(params.limit ?? 50, 500));
-    const pageSize = Math.min(100, want);
+    const fetchedAt = new Date().toISOString();
+    const requestedLimit = params.limit ?? 50;
+    const requestedScanLimit = params.scan_limit ?? Math.max(requestedLimit * 10, 500);
+    if (requestedScanLimit < requestedLimit) {
+      return {
+        ok: false, source: this.id, positions: [], scanned: 0, exhausted: false,
+        truncated: true, fetched_at: fetchedAt,
+        error: "scan_limit must be greater than or equal to limit",
+      };
+    }
+    const want = Math.max(1, Math.min(requestedLimit, 5000));
+    const scanLimit = Math.max(1, Math.min(requestedScanLimit, 5000));
+    const pageSize = 100;
     // 默认锁定"国央企":央企 + 国企(company_nature 接受数组,OR 关系)
     const company_nature = ["116wwMpd", "11AzDak"];
     const recruitment_type: string[] = [];
@@ -130,33 +241,77 @@ const adapter: SourceAdapter = {
     const out: RawPosition[] = [];
     const seen = new Set<string>();
     let page = 1;
-    const maxPages = Math.ceil(want / pageSize) + 1;
+    let scanned = 0;
+    let exhausted = false;
+    let stoppedByLimit = false;
+    const deadline = Date.now() + TOTAL_TIMEOUT_MS;
     try {
-      while (out.length < want && page <= maxPages) {
+      while (out.length < want && scanned < scanLimit) {
+        const remainingMs = deadline - Date.now();
+        if (remainingMs <= 0) throw new Error("overall timeout");
         const body: Record<string, unknown> = { page, page_size: pageSize, company_nature };
         if (recruitment_type.length) body.recruitment_type = recruitment_type;
-        if (params.keyword) body.keyword = params.keyword;
-        const json = await postJson(body);
-        if (json?.code !== 200) return { ok: false, source: this.id, positions: out, error: `code=${json?.code} msg=${json?.msg}` };
-        const list: any[] = json?.data?.list ?? [];
-        if (list.length === 0) break; // total 字段不可信,空 list = 到底
-        for (const rec of list) {
-          const r = parseRecord(rec);
-          if (!r.id || seen.has(r.id)) continue;
-          seen.add(r.id); out.push(r);
+        // keyword 服务端参数实测会返回大量无关记录，统一在客户端复核，避免错误下推漏召回。
+        const json = await postJson(body, Math.min(12_000, remainingMs));
+        const protocolError = responseError(json);
+        if (protocolError) {
+          return out.length > 0
+            ? {
+                ok: true, source: this.id, positions: out,
+                scanned, exhausted: false, truncated: true, fetched_at: fetchedAt,
+                note: `部分结果(上游业务/协议错误: ${protocolError})`,
+              }
+            : {
+                ok: false, source: this.id, positions: [], scanned, exhausted: false,
+                truncated: true, fetched_at: fetchedAt, error: protocolError,
+              };
         }
-        if (list.length < pageSize) break;
+        const list: any[] = json.data.list;
+        if (list.length === 0) { exhausted = true; break; }
+        const remaining = scanLimit - scanned;
+        const inspected = list.slice(0, remaining);
+        for (const rec of inspected) {
+          scanned++;
+          if (!isStateOwnedRecord(rec)) continue;
+          const r = parseRecord(rec);
+          if (!r || !r.id || seen.has(r.id)) continue;
+          seen.add(r.id);
+          if (matchesSourceFilters(r, params)) out.push(r);
+          if (out.length >= want) { stoppedByLimit = true; break; }
+        }
+        const inspectedWholePage = inspected.length === list.length;
+        if (!stoppedByLimit && inspectedWholePage && list.length < pageSize) {
+          exhausted = true;
+          break;
+        }
         page++;
       }
     } catch (e: any) {
       if (out.length === 0) {
         const hint = /aborted|timeout|fetch failed|ECONN|ENOTFOUND/i.test(e?.message || "")
           ? "网络不可达(国聘 gp-api;受限网络/沙箱会失败,正常机器可访问)" : e?.message;
-        return { ok: false, source: this.id, positions: [], error: hint };
+        return {
+          ok: false, source: this.id, positions: [], scanned, exhausted: false,
+          truncated: true, fetched_at: fetchedAt, error: hint,
+        };
       }
-      return { ok: true, source: this.id, total: out.length, positions: out, note: `部分结果(中断: ${e?.message})` };
+      return {
+        ok: true, source: this.id, positions: out,
+        scanned, exhausted: false, truncated: true, fetched_at: fetchedAt,
+        note: `部分结果(中断: ${e?.message})`,
+      };
     }
-    return { ok: true, source: this.id, total: out.length, positions: out.slice(0, want) };
+    const truncated = !exhausted && (stoppedByLimit || scanned >= scanLimit);
+    return {
+      ok: true, source: this.id, total: exhausted ? out.length : undefined,
+      positions: out.slice(0, want),
+      scanned, exhausted, truncated, fetched_at: fetchedAt,
+      note: truncated
+        ? (stoppedByLimit
+            ? `达到返回上限 ${want}，源中可能还有更多匹配岗位`
+            : `扫描达到上限 ${scanLimit}，结果可能不完整`)
+        : undefined,
+    };
   },
 };
 

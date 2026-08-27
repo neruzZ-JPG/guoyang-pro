@@ -1,6 +1,6 @@
 // cli/src/ingest-enterprises.ts
 // 合并 raw/enterprises/*.json(种子 + agent team 名录产出)→ data/enterprises/roster.json
-// 每个 raw 文件可为 Enterprise[] 或 { enterprises: Enterprise[], sources?: string }。
+// 每个 raw 文件可为 Enterprise[] 或 { enterprises: Enterprise[], source/sources?: string }。
 // 去重(按 id;无 id 按 name 哈希生成稳定 id),归一化 regulator/tier,统计 meta。
 // Usage: npx tsx src/ingest-enterprises.ts
 import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from "node:fs";
@@ -54,9 +54,21 @@ function main() {
       files++;
       const parsed = JSON.parse(readFileSync(join(RAW, f), "utf-8"));
       const list: Enterprise[] = Array.isArray(parsed) ? parsed : (parsed.enterprises ?? []);
-      if (parsed.sources) String(parsed.sources).split(/[\n;,]/).map((s) => s.trim()).filter(Boolean).forEach((s) => sources.add(s));
+      if (!Array.isArray(parsed) && !parsed.source && !parsed.sources) {
+        throw new Error(`企业 raw 文件 ${f} 缺少 source/sources`);
+      }
+      if (Array.isArray(parsed) && !list.every((enterprise) => enterprise.source)) {
+        throw new Error(`企业 raw 数组文件 ${f} 中存在无 source 企业`);
+      }
+      for (const sourceText of [parsed.source, parsed.sources]) {
+        if (!sourceText) continue;
+        const urls = String(sourceText).match(/https?:\/\/[^\s,;，；)）]+/g) ?? [];
+        if (urls.length) urls.forEach((s) => sources.add(s));
+        else sources.add(String(sourceText).trim());
+      }
       for (const raw of list) {
         if (!raw?.name) continue;
+        if (raw.source) sources.add(String(raw.source).trim());
         const id = (raw.id && String(raw.id).trim()) || slugId(raw.name);
         const ent: Enterprise = {
           id,
@@ -90,6 +102,24 @@ function main() {
     const t = a.tier.localeCompare(b.tier);
     return t !== 0 ? t : a.short.localeCompare(b.short);
   });
+  if (files === 0 || enterprises.length === 0) {
+    throw new Error("没有可用的企业 raw 输入；拒绝覆盖现有名录");
+  }
+  if (sources.size === 0) {
+    throw new Error("企业 raw 缺少可核验 source/sources；拒绝生成无来源名录");
+  }
+  const ownerByName = new Map<string, string>();
+  for (const enterprise of enterprises) {
+    for (const value of [enterprise.name, enterprise.short, ...(enterprise.aliases ?? [])]) {
+      const normalized = value.normalize("NFKC").trim().toLowerCase();
+      if (!normalized) continue;
+      const owner = ownerByName.get(normalized);
+      if (owner && owner !== enterprise.id) {
+        throw new Error(`企业名称/别名冲突: “${value}” 同时属于 ${owner} 和 ${enterprise.id}`);
+      }
+      ownerByName.set(normalized, enterprise.id);
+    }
+  }
 
   const by_tier: Record<string, number> = {};
   const by_regulator: Record<string, number> = {};
@@ -100,7 +130,7 @@ function main() {
 
   const roster: EnterpriseRoster = {
     meta: {
-      version: "0.1.0",
+      version: "0.2.0",
       built_at: new Date().toISOString(),
       total: enterprises.length,
       by_tier,
