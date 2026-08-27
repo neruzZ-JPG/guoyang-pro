@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 
-const PROMPT = `跑 \`npx @ha7ch/guoyang-pro@latest help\` 把命令摸清楚，帮我规划国央企求职。
+const PACKAGE_NAME = "@neruzz-jpg/guoyang-pro";
+const REPOSITORY_URL = "https://github.com/neruzZ-JPG/guoyang-pro";
+const NPM_URL = "https://www.npmjs.com/package/@neruzz-jpg/guoyang-pro";
+
+const PROMPT = `跑 \`npx ${PACKAGE_NAME}@latest help\` 把命令摸清楚，帮我规划国央企求职。
 
 先问我：学历、专业、院校层级(985/211/双一流/普通本科)、政治面貌、
 意向城市、意向行业(电力/油气/金融/通信/烟草...)、校招还是社招。
@@ -34,9 +38,9 @@ const ARCH = [
   },
 ];
 
-const SIBLINGS = [
-  { name: "大厂 JOB", href: "https://job.ha7ch.com", desc: "互联网 / 大厂在招岗位" },
-  { name: "考公 PRO", href: "https://kaogong.ha7ch.com", desc: "国考省考职位 + 进面分" },
+const PROJECT_LINKS = [
+  { name: "GitHub 仓库", href: REPOSITORY_URL, desc: "neruzZ-JPG/guoyang-pro" },
+  { name: "npm 包", href: NPM_URL, desc: PACKAGE_NAME },
 ];
 
 function RouteBadge({ status, text }: { status: Status; text: string }) {
@@ -66,7 +70,7 @@ export default function Home() {
     <main className="page">
       {/* Hero */}
       <h1 className="brand">国央企 Pro</h1>
-      <p className="lede">$ npx @ha7ch/guoyang-pro@latest help</p>
+      <p className="lede">$ npx {PACKAGE_NAME}@latest help</p>
       <p className="tagline">
         国央企招聘，<strong>静态的随包带走，在招的实时拉取</strong>。名录、梯队、招聘日历
         这些慢变数据打进包里，装好即查、离线可用；而「在招岗位」像大厂一样每天开/关——
@@ -126,16 +130,16 @@ export default function Home() {
 
       {/* Install */}
       <p className="section-label">Install</p>
-      <pre className="code-block">npx @ha7ch/guoyang-pro@latest help</pre>
+      <pre className="code-block">npx {PACKAGE_NAME}@latest help</pre>
 
-      {/* Siblings */}
-      <p className="section-label">同系列</p>
+      {/* Project links */}
+      <p className="section-label">项目入口</p>
       <div className="siblings">
-        {SIBLINGS.map((s) => (
-          <a className="sibling" key={s.href} href={s.href}>
+        {PROJECT_LINKS.map((link) => (
+          <a className="sibling" key={link.href} href={link.href}>
             <span>
-              <span className="sibling-name">{s.name}</span>
-              <span className="sibling-desc">{s.desc}</span>
+              <span className="sibling-name">{link.name}</span>
+              <span className="sibling-desc">{link.desc}</span>
             </span>
             <span className="sibling-arrow">↗</span>
           </a>
@@ -144,13 +148,11 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="footer">
-        <a href="https://github.com/HA7CH/guoyang-pro">GitHub</a>
+        <a href={REPOSITORY_URL}>GitHub</a>
         <span style={{ margin: "0 0.5rem" }}>&middot;</span>
-        <a href="https://www.npmjs.com/package/@ha7ch/guoyang-pro">npm</a>
+        <a href={NPM_URL}>npm</a>
         <span style={{ margin: "0 0.5rem" }}>&middot;</span>
-        <a href="https://guoyang.ha7ch.com">guoyang.ha7ch.com</a>
-        <span style={{ margin: "0 0.5rem" }}>&middot;</span>
-        <a href="https://ha7ch.com">ha7ch.com</a>
+        <a href="https://github.com/neruzZ-JPG">维护者：neruzZ-JPG</a>
       </footer>
     </main>
   );

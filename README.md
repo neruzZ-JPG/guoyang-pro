@@ -8,10 +8,12 @@
 - 24 小时本地缓存与来源、抓取时间、覆盖状态披露；
 - 招聘日历、岗位匹配和冲稳保启发式规划。
 
-[guoyang.ha7ch.com](https://guoyang.ha7ch.com) · 与 [job-pro](https://job.ha7ch.com)、[kaogong-pro](https://kaogong.ha7ch.com) 同系列。
+当前维护仓库：[neruzZ-JPG/guoyang-pro](https://github.com/neruzZ-JPG/guoyang-pro)
+
+新版 npm 包：[`@neruzz-jpg/guoyang-pro`](https://www.npmjs.com/package/@neruzz-jpg/guoyang-pro)
 
 ```text
-跑 `npx @ha7ch/guoyang-pro@latest help` 把命令摸清楚，帮我规划国央企求职。
+跑 `npx @neruzz-jpg/guoyang-pro@latest help` 把命令摸清楚，帮我规划国央企求职。
 
 先问我学历、专业、院校层级、政治面貌、意向城市、意向行业和招聘类型；
 再查询企业名录、实时岗位、来源状态与招聘时间线。
@@ -32,7 +34,8 @@
 ## 常用命令
 
 ```bash
-npx @ha7ch/guoyang-pro@latest help
+# npm 包发布后
+npx @neruzz-jpg/guoyang-pro@latest help
 
 # 静态名录
 guoyang-pro enterprises --tier T0
@@ -63,6 +66,9 @@ guoyang-pro match --sector 电信运营 --location 上海 --keywords 数据,算�
 guoyang-pro hot --by sector
 guoyang-pro stats
 ```
+
+> `@neruzz-jpg/guoyang-pro` 尚未发布时，请先克隆本仓库，再进入 `cli/`
+> 执行 `npm ci && npm run build && node dist/index.js help`。
 
 ## 如何理解查询结果
 
@@ -117,3 +123,21 @@ npm pack --dry-run
 ```
 
 CLI 零运行时依赖，支持 Node.js ≥18。MIT。
+
+Web 端部署到 Vercel 时会优先使用 Vercel 提供的生产域名；如绑定自定义域名，
+请设置 `NEXT_PUBLIC_SITE_URL=https://你的域名`，用于 Open Graph 与 sitemap。
+
+## 发布新版 CLI
+
+首次发布前，请确认 npm 账号拥有 `@neruzz-jpg` scope，然后执行：
+
+```bash
+cd cli
+npm login
+npm publish --access public
+```
+
+发布成功后，README 中的 `npx @neruzz-jpg/guoyang-pro@latest ...` 命令即可直接使用。
+
+本项目基于 MIT 许可的上游项目继续开发；原始版权声明保留在 `LICENSE`
+和 `cli/LICENSE` 中，当前维护与发布入口以上述仓库和 npm 包为准。
