@@ -1,15 +1,15 @@
 import type { Metadata } from "next";
 import { SITE_URL } from "../lib/site";
-import "./globals.css";
+import "./marketing.css";
 
 export const metadata: Metadata = {
-  title: "guoyang-pro — 用 Claude Code 规划你的国央企求职",
+  title: "国央企 Pro — 企业、岗位与求职规划 CLI",
   description:
-    "国央企求职 CLI。158 家参考名录离线可查，实时扫描国聘与 24365，披露来源、抓取时间、扫描边界和降级状态。",
+    "面向国央企求职场景的命令行助手：企业查询、岗位搜索、招聘日历、智能匹配与投递规划。",
   metadataBase: new URL(SITE_URL),
   openGraph: {
-    title: "guoyang-pro · 国央企 PRO",
-    description: "可溯源名录、多源实时岗位、子公司归一化与覆盖状态披露",
+    title: "国央企 Pro · 一条命令找到值得投的机会",
+    description: "企业名录、岗位搜索、招聘日历、智能匹配与求职规划。",
     url: SITE_URL,
   },
   keywords: [
