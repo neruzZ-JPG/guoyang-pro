@@ -6,8 +6,9 @@ const PROMPT = `跑 \`npx @ha7ch/guoyang-pro@latest help\` 把命令摸清楚，
 
 先问我：学历、专业、院校层级(985/211/双一流/普通本科)、政治面貌、
 意向城市、意向行业(电力/油气/金融/通信/烟草...)、校招还是社招。
-然后用 CLI 拉真实数据：查央企名录与梯队、实时在招岗位、招聘时间线。
-提醒我用工性质(在编/正式 vs 劳务派遣)与薪资口碑的差异。`;
+然后用 CLI 查企业名录、实时岗位、来源状态与招聘时间线。
+不要把“当前扫描窗口未命中”说成“全网没有岗位”；提醒我核验投递页、
+用工性质与薪资口径。`;
 
 type Status = "live" | "building" | "none";
 type DataRow = { name: string; nature: string; route: Status; routeText: string };
@@ -16,8 +17,8 @@ const DATA: DataRow[] = [
   { name: "央企名录 / 梯队", nature: "慢变参考", route: "live", routeText: "随包静态" },
   { name: "行业分类", nature: "慢变参考", route: "live", routeText: "随包静态" },
   { name: "招聘日历", nature: "慢变参考", route: "live", routeText: "随包静态" },
-  { name: "在招岗位", nature: "每天开/关", route: "building", routeText: "实时拉源" },
-  { name: "投递截止日", nature: "每天开/关", route: "building", routeText: "实时拉源" },
+  { name: "在招岗位", nature: "每天开/关", route: "live", routeText: "多源实时扫描" },
+  { name: "投递截止日", nature: "每天开/关", route: "live", routeText: "来源字段" },
 ];
 
 const ARCH = [
@@ -28,8 +29,8 @@ const ARCH = [
   },
   {
     kind: "实时层（运行时拉源）",
-    items: ["在招岗位列表", "投递截止日", "岗位要求 / 材料", "招聘公告"],
-    note: "岗位像大厂招聘一样每天开/关，所以不预存——运行时实时拉国聘等源，避免「查到的岗位早就关了」。",
+    items: ["国聘 / 24365", "子公司归一化", "来源与抓取时间", "24 小时降级缓存"],
+    note: "按扫描窗口实时拉取并披露 scanned / complete / degraded；未扫到底时，不把零命中解释为全源无岗位。",
   },
 ];
 
@@ -51,10 +52,14 @@ function RouteBadge({ status, text }: { status: Status; text: string }) {
 export default function Home() {
   const [copied, setCopied] = useState(false);
 
-  function handleCopy() {
-    navigator.clipboard.writeText(PROMPT);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(PROMPT);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
   }
 
   return (
@@ -65,7 +70,8 @@ export default function Home() {
       <p className="tagline">
         国央企招聘，<strong>静态的随包带走，在招的实时拉取</strong>。名录、梯队、招聘日历
         这些慢变数据打进包里，装好即查、离线可用；而「在招岗位」像大厂一样每天开/关——
-        所以<strong>不预存</strong>，运行时实时拉国聘等公开源，只给你当下真正在招的岗位。
+        所以运行时扫描国聘、24365 等公开源，并显示来源、抓取时间与覆盖边界；
+        网络失败时只回退到 24 小时内缓存。
       </p>
 
       {/* Prompt Card */}

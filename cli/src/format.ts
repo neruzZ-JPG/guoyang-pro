@@ -64,7 +64,9 @@ export function formatEnterprises(ents: Enterprise[]): string {
 
 export function formatPositions(positions: Position[]): string {
   const headers = ["企业", "岗位", "类型", "学历", "专业", "人数", "地点", "用工"];
-  const t: Record<string, string> = { campus: "校招", social: "社招", intern: "实习" };
+  const t: Record<string, string> = {
+    campus: "校招", social: "社招", intern: "实习", unknown: "未标注",
+  };
   const rows = positions.map((p) => [
     clip(p.enterprise_name, 14),
     clip(p.title, 18),

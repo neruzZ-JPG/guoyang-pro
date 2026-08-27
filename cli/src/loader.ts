@@ -29,10 +29,7 @@ export function loadRoster(): EnterpriseRoster {
   if (rosterCache) return rosterCache;
   const fp = join(dataDir("enterprises"), "roster.json");
   if (!existsSync(fp)) {
-    return (rosterCache = {
-      meta: { version: "0", built_at: "", total: 0, by_tier: {}, by_regulator: {} },
-      enterprises: [],
-    });
+    throw new Error(`企业名录文件缺失: ${fp}`);
   }
   return (rosterCache = JSON.parse(readFileSync(fp, "utf-8")) as EnterpriseRoster);
 }
@@ -43,15 +40,21 @@ export function allEnterprises(): Enterprise[] {
 
 export function findEnterprise(query: string): Enterprise | undefined {
   const q = query.trim();
+  if (!q) return undefined;
   const ents = allEnterprises();
-  return (
+  const exact =
     ents.find((e) => e.id === q) ||
     ents.find((e) => e.short === q || e.name === q) ||
-    ents.find((e) => e.aliases?.includes(q)) ||
-    // 双向子串:e.name.includes(q) 处理查询是简称的情况;q.includes(e.name) 处理
-    // 查询带后缀/分支(如"中国工商银行股份有限公司"匹配登记名"中国工商银行")的情况。
-    ents.find((e) => e.name.includes(q) || q.includes(e.name) || e.short.includes(q) || q.includes(e.short))
+    ents.find((e) => e.aliases?.includes(q));
+  if (exact) return exact;
+
+  // 短/宽泛查询（如“中国”）不随意返回排序最前的一家；仅唯一候选时才匹配。
+  if (q.length < 3) return undefined;
+  const candidates = ents.filter((e) =>
+    e.name.includes(q) ||
+    q.includes(e.name),
   );
+  return candidates.length === 1 ? candidates[0] : undefined;
 }
 
 export type EnterpriseFilter = {
@@ -81,9 +84,7 @@ export function loadPosMeta(): PositionMeta {
   if (posMetaCache) return posMetaCache;
   const fp = join(dataDir("positions"), "meta.json");
   if (!existsSync(fp)) {
-    return (posMetaCache = {
-      version: "0", built_at: "", years: [], total_positions: 0, per_year: {},
-    });
+    throw new Error(`岗位元数据文件缺失: ${fp}`);
   }
   return (posMetaCache = JSON.parse(readFileSync(fp, "utf-8")) as PositionMeta);
 }
@@ -105,7 +106,13 @@ const yearCache = new Map<number, Position[]>();
 export function loadYear(year: number): Position[] {
   if (yearCache.has(year)) return yearCache.get(year)!;
   const fp = join(dataDir("positions"), `${year}.json.gz`);
-  if (!existsSync(fp)) { yearCache.set(year, []); return []; }
+  if (!existsSync(fp)) {
+    if (loadPosMeta().years.includes(year)) {
+      throw new Error(`岗位元数据声明了 ${year} 年，但分片文件缺失: ${fp}`);
+    }
+    yearCache.set(year, []);
+    return [];
+  }
   const parsed = JSON.parse(gunzipSync(readFileSync(fp)).toString("utf-8")) as { year: number; positions: Position[] };
   yearCache.set(year, parsed.positions);
   return parsed.positions;
@@ -131,8 +138,8 @@ export function filterPositions(positions: Position[], f: PositionFilter): Posit
     if (f.tier && p.tier !== f.tier) return false;
     if (f.sector && p.sector !== f.sector) return false;
     if (f.recruit_type && p.recruit_type !== f.recruit_type) return false;
-    if (f.education && !p.education.includes(f.education)) return false;
-    if (f.major && !matchMajor(p.major, f.major)) return false;
+    if (f.education && !educationEligible(p.education, f.education)) return false;
+    if (f.major && !majorEligible(p.major, f.major)) return false;
     if (f.location && !p.work_location.includes(f.location)) return false;
     if (f.employment_type && p.employment_type !== f.employment_type) return false;
     if (f.keyword) {
@@ -144,11 +151,74 @@ export function filterPositions(positions: Position[], f: PositionFilter): Posit
   });
 }
 
-function matchMajor(positionMajor: string, userMajor: string): boolean {
-  if (!positionMajor || positionMajor.includes("不限")) return true;
+function educationRank(value: string): number | undefined {
+  if (/博士/.test(value)) return 4;
+  if (/硕士|研究生/.test(value)) return 3;
+  if (/本科|学士/.test(value)) return 2;
+  if (/大专|专科|高职/.test(value)) return 1;
+  if (/高中|中专/.test(value)) return 0;
+  return undefined;
+}
+
+/** candidateEducation 为求职者学历；岗位“不限”或求职者学历达到最低门槛即匹配。 */
+export function educationEligible(requirement: string, candidateEducation: string): boolean {
+  if (!requirement || /未标注|未知/.test(requirement)) return false;
+  if (/不限|无要求/.test(requirement)) return true;
+  const candidate = educationRank(candidateEducation);
+  if (candidate === undefined) return false;
+  const tokenRanks = [...requirement.matchAll(/博士|硕士|研究生|本科|学士|大专|专科|高职|高中|中专/g)]
+    .map((match) => educationRank(match[0]))
+    .filter((rank): rank is number => rank !== undefined);
+  if (tokenRanks.length > 0) {
+    const uniqueRanks = [...new Set(tokenRanks)];
+    const excluded = [...requirement.matchAll(
+      /(?:不含|不包括|排除)(博士|硕士|研究生|本科|学士|大专|专科|高职|高中|中专)|(博士|硕士|研究生|本科|学士|大专|专科|高职|高中|中专)除外/g,
+    )]
+      .map((match) => educationRank(match[1] || match[2]))
+      .filter((rank): rank is number => rank !== undefined);
+    if (excluded.includes(candidate)) return false;
+    if (/仅限|仅招|最高学历.{0,6}(?:要求|为|须为)|必须是/.test(requirement)) {
+      return uniqueRanks.includes(candidate);
+    }
+    if (/至|到|[-~～—]/.test(requirement) && uniqueRanks.length > 1) {
+      return candidate >= Math.min(...uniqueRanks) && candidate <= Math.max(...uniqueRanks);
+    }
+    if (/及以下/.test(requirement)) return candidate <= Math.max(...uniqueRanks);
+    if (/以下/.test(requirement)) return candidate < Math.max(...uniqueRanks);
+    if (/及以上|以上/.test(requirement)) return candidate >= Math.min(...uniqueRanks);
+    if (uniqueRanks.length > 1 && /[、,，/]|或者|或/.test(requirement)) {
+      return uniqueRanks.includes(candidate);
+    }
+    return candidate >= uniqueRanks[0];
+  }
+  return requirement.includes(candidateEducation) || candidateEducation.includes(requirement);
+}
+
+export function majorEligible(positionMajor: string, userMajor: string): boolean {
+  if (!positionMajor || /未标注|未知/.test(positionMajor)) return false;
+  if (positionMajor.includes("不限")) return true;
+  const exclusions = [
+    ...positionMajor.matchAll(/(?:不含|不包括|排除)([^，,；;。)）]+)|除([^，,；;。)）]+)外/g),
+  ].map((match) => (match[1] || match[2] || "").trim()).filter(Boolean);
+  if (exclusions.some((item) => item.includes(userMajor) || userMajor.includes(item))) return false;
+  if (/其他专业|其余专业/.test(positionMajor)) return true;
+  const familyAliases: Record<string, string[]> = {
+    "计算机类": ["计算机", "软件工程", "网络工程", "信息安全", "数据科学", "人工智能"],
+    "电子信息类": ["电子信息", "通信工程", "电子科学", "微电子", "集成电路"],
+    "机械类": ["机械", "车辆工程", "工业设计", "机电"],
+    "材料类": ["材料", "冶金", "高分子"],
+    "法学类": ["法学", "法律", "知识产权"],
+    "经济学类": ["经济学", "金融", "财政", "国际经济"],
+  };
+  for (const [family, aliases] of Object.entries(familyAliases)) {
+    if (positionMajor.includes(family) && aliases.some((alias) => userMajor.includes(alias))) return true;
+  }
   const normalized = positionMajor.replace(/[;；,，、/]/g, "|");
   return normalized.split("|").some(
-    (m) => m.trim().includes(userMajor) || userMajor.includes(m.trim()),
+    (m) => {
+      const token = m.trim();
+      return !!token && (token.includes(userMajor) || userMajor.includes(token));
+    },
   );
 }
 
@@ -170,6 +240,6 @@ let calendarCache: CalendarEntry[] | null = null;
 export function loadCalendar(): CalendarEntry[] {
   if (calendarCache) return calendarCache;
   const fp = join(dataDir("calendar"), "calendar.json");
-  if (!existsSync(fp)) return (calendarCache = []);
+  if (!existsSync(fp)) throw new Error(`招聘时间线文件缺失: ${fp}`);
   return (calendarCache = JSON.parse(readFileSync(fp, "utf-8")) as CalendarEntry[]);
 }

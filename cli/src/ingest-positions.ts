@@ -3,14 +3,17 @@
 // 处理:派生用工性质、按名录匹配 enterprise_id/梯队/行业、按招聘年份分片 gzip。
 // 各 raw 文件可为 Position[] 或 { positions: Position[], source?: string, note?: string }。
 // Usage: npx tsx src/ingest-positions.ts
-import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import {
+  readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync, rmSync, renameSync,
+} from "node:fs";
 import { gzipSync } from "node:zlib";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  classifyEmployment, resolveRecruitType,
-  type Position, type Enterprise, type EnterpriseRoster, type RecruitType,
+  resolveRecruitType, type Position, type Enterprise, type EnterpriseRoster,
 } from "./codes.js";
+import type { RawPosition } from "./adapters/types.js";
+import { normalizePosition } from "./live.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const RAW = join(__dirname, "..", "raw", "positions");
@@ -22,45 +25,47 @@ function loadRoster(): Enterprise[] {
   return (JSON.parse(readFileSync(ROSTER, "utf-8")) as EnterpriseRoster).enterprises;
 }
 
-// 按企业名/简称/别名匹配名录 → 返回企业(用于补 enterprise_id/tier/sector)
-function makeMatcher(ents: Enterprise[]) {
-  return (name: string): Enterprise | undefined => {
-    const q = (name || "").trim();
-    if (!q) return undefined;
-    return (
-      ents.find((e) => e.name === q || e.short === q) ||
-      ents.find((e) => e.aliases?.some((a) => a === q)) ||
-      ents.find((e) => q.includes(e.short) || e.short.includes(q)) ||
-      ents.find((e) => q.includes(e.name))
-    );
-  };
-}
-
 const CURRENT_YEAR = new Date().getFullYear();
 
-function toPos(raw: any, match: ReturnType<typeof makeMatcher>): Position | null {
+function toPos(raw: any, ents: Enterprise[], fileSource: string, sourceId: string): Position | null {
   const enterprise_name = (raw.enterprise_name || raw.enterprise || raw.company || raw.companyName || "").trim();
   const title = (raw.title || raw.position_name || raw.jobName || raw.name || "").trim();
-  if (!enterprise_name && !title) return null;
-  const ent = raw.enterprise_id ? undefined : match(enterprise_name);
-  const empText = [raw.employment_type, raw.remarks, raw.desc, raw.requirements, title].filter(Boolean).join(" ");
-  const rt: RecruitType = resolveRecruitType(raw.recruit_type || raw.type) || "social";
-  const year = Number(raw.year) || (raw.posted_at ? new Date(raw.posted_at).getFullYear() : 0) || CURRENT_YEAR;
-  return {
-    id: String(raw.id || raw.position_id || `${enterprise_name}-${title}-${raw.work_location || ""}`).slice(0, 80),
+  if (!enterprise_name || !title) return null;
+  const explicitYear = Number(raw.year);
+  const hasExplicitYear = raw.year !== undefined && raw.year !== null && raw.year !== "";
+  if (
+    hasExplicitYear &&
+    (!Number.isInteger(explicitYear) || explicitYear < 2000 || explicitYear > CURRENT_YEAR + 2)
+  ) return null;
+  const postedTime = raw.posted_at ? Date.parse(raw.posted_at) : NaN;
+  const year = hasExplicitYear
+    ? explicitYear
+    : Number.isFinite(postedTime)
+      ? new Date(postedTime).getFullYear()
+      : NaN;
+  if (!Number.isInteger(year)) return null;
+  const source = String(raw.source || raw.source_url || raw.apply_url || fileSource).trim();
+  if (!source) return null;
+  const warnings = Array.isArray(raw.quality_warnings)
+    ? raw.quality_warnings.map(String)
+    : [];
+  if (raw.posted_at && !Number.isFinite(postedTime)) {
+    warnings.push("发布时间无法解析，已使用显式 year");
+  }
+  if (!(Number(raw.headcount) > 0)) warnings.push("招聘人数未可靠标注，headcount 按 1 占位");
+  if (!raw.major) warnings.push("专业要求未标注，请以投递页为准");
+  const adapted: RawPosition = {
+    id: raw.id || raw.position_id || undefined,
     year,
-    enterprise_id: raw.enterprise_id || ent?.id || "",
+    enterprise_id: raw.enterprise_id || undefined,
     enterprise_name,
-    tier: raw.tier || ent?.tier,
-    sector: raw.sector || (ent?.sector as string | undefined),
     title,
-    recruit_type: rt,
+    recruit_type: resolveRecruitType(raw.recruit_type || raw.type) || "unknown",
     work_location: (raw.work_location || raw.location || raw.city || "").trim(),
     headcount: Number(raw.headcount) || 1,
     education: (raw.education || "").trim(),
-    major: (raw.major || "不限").trim(),
-    employment_type: raw.employment_type && ["在编/正式", "合同制", "劳务派遣", "未明确"].includes(raw.employment_type)
-      ? raw.employment_type : classifyEmployment(empText),
+    major: raw.major ? String(raw.major).trim() : undefined,
+    employment_type: raw.employment_type || undefined,
     salary_ref: raw.salary_ref || raw.salary || undefined,
     political: raw.political || undefined,
     experience: raw.experience || undefined,
@@ -70,14 +75,17 @@ function toPos(raw: any, match: ReturnType<typeof makeMatcher>): Position | null
     deadline: raw.deadline || undefined,
     posted_at: raw.posted_at || undefined,
     apply_url: raw.apply_url || raw.url || undefined,
-    source: raw.source || raw.source_url || undefined,
+    source,
+    source_id: raw.source_id || sourceId,
+    source_position_id: raw.source_position_id || raw.id || raw.position_id || undefined,
+    source_company_id: raw.source_company_id || undefined,
+    quality_warnings: warnings.length ? warnings : undefined,
   };
+  return normalizePosition(adapted, ents, new Date().toISOString());
 }
 
 function main() {
-  mkdirSync(OUTDIR, { recursive: true });
   const ents = loadRoster();
-  const match = makeMatcher(ents);
   const byYear = new Map<number, Position[]>();
   const coverage: Record<string, { positions: number; note?: string }> = {};
   let files = 0, matched = 0;
@@ -88,17 +96,27 @@ function main() {
       files++;
       const parsed = JSON.parse(readFileSync(join(RAW, f), "utf-8"));
       const list: any[] = Array.isArray(parsed) ? parsed : (parsed.positions ?? []);
-      const srcKey = parsed.source || f.replace(".json", "");
+      const wrapperSource = Array.isArray(parsed) ? "" : String(parsed.source || "").trim();
+      if (!wrapperSource && !list.every((raw) => raw?.source || raw?.source_url || raw?.apply_url)) {
+        throw new Error(`岗位 raw 文件 ${f} 缺少可核验 source/apply_url`);
+      }
+      const srcKey = wrapperSource || f.replace(".json", "");
+      const sourceId = String(Array.isArray(parsed) ? "" : parsed.source_id || "").trim() ||
+        f.replace(".json", "");
       let n = 0;
-      for (const raw of list) {
-        const p = toPos(raw, match);
-        if (!p) continue;
+      for (let index = 0; index < list.length; index++) {
+        const raw = list[index];
+        const p = toPos(raw, ents, wrapperSource, sourceId);
+        if (!p) throw new Error(`岗位 raw 文件 ${f} 第 ${index + 1} 条记录无效`);
         if (p.enterprise_id) matched++;
         (byYear.get(p.year) ?? byYear.set(p.year, []).get(p.year)!).push(p);
         n++;
       }
       coverage[srcKey] = { positions: n, note: parsed.note };
     }
+  }
+  if ((files === 0 || byYear.size === 0) && process.env.GUOYANG_ALLOW_EMPTY_INGEST !== "1") {
+    throw new Error("没有 raw/positions/*.json 输入；拒绝清空现有岗位快照。确需空构建时设置 GUOYANG_ALLOW_EMPTY_INGEST=1");
   }
 
   // 去重:同 id 全字段相同
@@ -113,20 +131,32 @@ function main() {
     byYear.set(y, kept);
   }
 
-  if (existsSync(OUTDIR)) for (const f of readdirSync(OUTDIR)) rmSync(join(OUTDIR, f));
+  const tempDir = `${OUTDIR}.tmp-${process.pid}`;
+  rmSync(tempDir, { recursive: true, force: true });
+  mkdirSync(tempDir, { recursive: true });
   const years = [...byYear.keys()].sort((a, b) => a - b);
   const perYear: Record<number, number> = {};
   let total = 0;
   for (const y of years) {
     const arr = byYear.get(y)!;
     perYear[y] = arr.length; total += arr.length;
-    writeFileSync(join(OUTDIR, `${y}.json.gz`), gzipSync(JSON.stringify({ year: y, positions: arr })));
+    writeFileSync(join(tempDir, `${y}.json.gz`), gzipSync(JSON.stringify({ year: y, positions: arr })));
   }
   const meta = {
-    version: "0.1.0", built_at: new Date().toISOString(),
+    version: "0.2.0", built_at: new Date().toISOString(),
     years, total_positions: total, per_year: perYear, coverage,
   };
-  writeFileSync(join(OUTDIR, "meta.json"), JSON.stringify(meta, null, 1));
+  writeFileSync(join(tempDir, "meta.json"), JSON.stringify(meta, null, 1));
+  const backupDir = `${OUTDIR}.backup-${process.pid}`;
+  rmSync(backupDir, { recursive: true, force: true });
+  if (existsSync(OUTDIR)) renameSync(OUTDIR, backupDir);
+  try {
+    renameSync(tempDir, OUTDIR);
+    rmSync(backupDir, { recursive: true, force: true });
+  } catch (error) {
+    if (existsSync(backupDir) && !existsSync(OUTDIR)) renameSync(backupDir, OUTDIR);
+    throw error;
+  }
 
   console.log(`合并 ${files} 个 raw 文件 → ${total} 个岗位 (${years.length} 年: ${years.join(",")})`);
   console.log(`企业归属匹配: ${matched}/${total};去重 ${deduped}`);

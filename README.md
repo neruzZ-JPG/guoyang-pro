@@ -1,76 +1,119 @@
 # guoyang-pro · 国央企 PRO
 
-用 Claude Code 规划你的国央企求职(国企/央企)。
-[guoyang.ha7ch.com](https://guoyang.ha7ch.com) · 与 [job-pro](https://job.ha7ch.com)(大厂)、[kaogong-pro](https://kaogong.ha7ch.com)(考公)同系列。
+面向 Claude Code / Codex / Cursor 的国央企求职 CLI：
 
-把下面这段 prompt 粘进 Claude Code / Codex / Cursor：
+- 158 家中央与地方国企参考名录；
+- 国聘、24365 多源实时岗位扫描；
+- 二三级子公司到母集团的保守归一化；
+- 24 小时本地缓存与来源、抓取时间、覆盖状态披露；
+- 招聘日历、岗位匹配和冲稳保启发式规划。
 
-```
+[guoyang.ha7ch.com](https://guoyang.ha7ch.com) · 与 [job-pro](https://job.ha7ch.com)、[kaogong-pro](https://kaogong.ha7ch.com) 同系列。
+
+```text
 跑 `npx @ha7ch/guoyang-pro@latest help` 把命令摸清楚，帮我规划国央企求职。
 
-先问我：学历、专业、院校层级(985/211/双一流/普通本科)、政治面貌、
-意向城市、意向行业(电力/油气/金融/通信/烟草...)、校招还是社招。
-然后用 CLI 拉真实数据：查央企名录与梯队、实时在招岗位、招聘时间线。
-提醒我用工性质(在编/正式 vs 劳务派遣)与薪资口碑的差异。
+先问我学历、专业、院校层级、政治面貌、意向城市、意向行业和招聘类型；
+再查询企业名录、实时岗位、来源状态与招聘时间线。
+不要把“当前扫描窗口未命中”说成“全网没有岗位”，并提醒我核验投递页、
+用工性质和薪资口径。
 ```
 
-## 为什么是"混合架构"
+## 数据路线
 
-国央企求职有两类数据，性质完全不同，所以分两条路存取：
-
-| 数据 | 性质 | 路线 |
+| 数据 | 路线 | 说明 |
 |---|---|---|
-| **名录 / 梯队 / 行业 / 招聘日历** | 慢变参考数据 | **随包静态发布**(像考公数据集) |
-| **在招岗位** | 时变数据(像大厂一样每天开/关) | **运行时实时拉取**(像 job-pro 适配器) |
+| 企业名录、行业、梯队 | 随 npm 包静态发布 | 离线可查；梯队是编辑性求职热度参考，不是官方评级 |
+| 招聘时间线 | 随包静态发布 | 行业典型规律，以企业当年公告为准 |
+| 在招岗位 | 运行时扫描国聘、24365 | 每条保留来源、抓取时间和质量提示 |
+| 短期岗位缓存 | `~/.guoyangpro/cache/positions.json` | 实时源全失败时回退到 24 小时内缓存；权限 `0600` |
+| 离线快照 | `cli/data/positions/*.json.gz` | 可选；当前包可能没有快照，只有显式 `--offline` 时使用 |
 
-岗位不提前快照存死——否则发出去就过期；名录与时间线则打包进 npm 包，离线可用、稳定，是产品的护城河。
-
-## 命令
+## 常用命令
 
 ```bash
 npx @ha7ch/guoyang-pro@latest help
 
-# 名录(静态,离线可用)
-guoyang-pro enterprises --tier T0                 # 顶级梯队企业
-guoyang-pro enterprises --sector 金融银行          # 按行业
-guoyang-pro enterprise 国家电网                     # 单企业详情 + 在招岗位
+# 静态名录
+guoyang-pro enterprises --tier T0
+guoyang-pro enterprises --sector 金融银行
 
-# 岗位(实时,默认联网拉各源)
-guoyang-pro search --sector 能源电力 --type 校招 --location 北京
-guoyang-pro search --enterprise 中石油 --education 硕士
-guoyang-pro search --sector 金融银行 --offline      # 仅用本地快照(不联网)
-guoyang-pro sources                                # 查实时数据源接通状态
+# 实时岗位；limit 是返回量，scan-limit 是每源最大扫描量
+guoyang-pro search --sector 能源电力 --type 校招 --location 北京 \
+  --limit 20 --scan-limit 2000
+guoyang-pro search --enterprise 国家电网 --education 本科
 
-# 规划
+# 不联网复用“相同筛选与覆盖参数”的最近 24 小时实时缓存
+# （不同于随包 --offline 快照）
+guoyang-pro search --sector 能源电力 --cache-only
+
+# 企业详情也实时扫描所属子公司岗位
+guoyang-pro enterprise 国家电网 --limit 20 --scan-limit 3000
+
+# 检查真实源健康；--static 只看配置、不联网
+guoyang-pro sources
+guoyang-pro sources --static
+
+# search 后可用完整 id 或源岗位 id 查看近期缓存详情
+guoyang-pro detail --id iguopin:215568737309296192
+
+# 规划命令共享实时/缓存岗位池
 guoyang-pro recommend --education 本科 --school-tier 211 --sector 金融银行
 guoyang-pro match --sector 电信运营 --location 上海 --keywords 数据,算法
-guoyang-pro calendar --sector 金融银行             # 招聘时间线/投递日历
+guoyang-pro hot --by sector
 guoyang-pro stats
 ```
 
-## 数据来源
+## 如何理解查询结果
 
-- **名录**：国务院国资委央企名录(~99家)、财政部中央金融企业(~27家)、中国烟草、国铁集团、地方头部国企。
-- **岗位(实时)**：[国聘网 iguopin.com](https://www.iguopin.com/)(国资委牵头聚合，覆盖 85%+ 央企国企岗)、[国家大学生就业服务平台 24365](https://www.ncss.cn/)、各大型央企招聘官网。
-- **招聘日历**：各行业校招/社招典型时间线规律(以各企业当年公告为准)。
+返回的 `data` 字段会披露：
 
-## 诚实披露
+- `mode`：`live` / `cache` / `offline`；`--cache-only` 可显式只读 24 小时缓存；
+- `fetched_at` 或 `cache_updated_at`；
+- `scanned`：本次实际扫描的上游记录数；
+- `degraded`：部分源失败或扫描窗口被截断；
+- `complete`：只有所有启用源都确认扫描到列表末尾时才为 `true`；
+- `sources[].ok/exhausted/truncated/note/error`：逐源健康与覆盖边界。
 
-- 岗位为各源**实时聚合**，命中量随当下在招情况变化；`sources` 可查每个源是否接通。
-- **薪资**国央企高度保密，仅以公开/口碑参考标注（"仅供参考"），数据质量天然弱于大厂。
-- **竞争度/冲稳保**为启发式估算(企业梯队+学历门槛 vs 院校层级)，**非官方录取数据**。
-- **用工性质**(在编/正式、合同制、劳务派遣)由岗位文本自动派生，识别不到标"未明确"，不臆断。
+当 `complete=false` 时，零结果只表示“当前扫描窗口未命中”，不能推断全源没有岗位。可提高 `--scan-limit`，上限为每源 5000 条。`--year` 只适用于 `--offline` 随包快照；当前包没有对应年份快照时会明确报错。
 
-## 开发
+## 数据可信度策略
+
+### 企业与行业
+
+- 官方名录参考：[国务院国资委央企名录](https://www.sasac.gov.cn/n2588045/n27271785/n27271792/c14159097/content.html)、[财政部](https://www.mof.gov.cn/)、[国家金融监督管理总局](https://www.nfra.gov.cn/)、[国铁集团](http://www.china-railway.com.cn/)、[国家烟草专卖局](http://www.tobacco.gov.cn/)。
+- 招聘主体保持源站原名；只有精确名称、明确别名或受控集团规则命中时才继承母集团梯队。
+- 未收录子公司仍可依据国聘的企业行业字段参与行业查询，但不会被强行猜测梯队。
+- `match_confidence` 为 `exact` / `affiliate` / `none`。
+
+### 岗位
+
+- 国聘是主源，使用其企业性质、行业、招聘类型、地点、学历、薪资和截止时间字段。
+- 24365 是聚合补充源，仅保留 `recProperty` 明确为国有/央企/国企的记录。
+- 24365 的 `recruitType` 枚举与标题存在冲突，因此只从“校招/应届/实习/社招”等明确文字推断；无法判断时标为 `unknown`。
+- 24365 的 `lowMonthPay/highMonthPay` 按“千元/月”列表口径展示，并始终标“仅供参考”。
+- 跨源同岗会合并 `source_urls`；招聘类型或薪资冲突写入 `quality_warnings`。
+- 明确过期岗位会被过滤；异常未来发布时间会留下质量告警。
+- `hot/cold/stats` 在未完整扫描全部源时明确标为 `partial_sample`，不把样本数称为全量岗位总数。
+
+## 边界
+
+- 实时公共接口可能限流、改版或临时不可达。
+- 目前没有各企业招聘官网的全量专用适配器；国聘和 24365 之外的岗位可能漏检。
+- 企业梯队、冲稳保和“相对易上岸”均为启发式参考，不是官方录取数据。
+- 用工性质由岗位文本派生；识别不到时保持“未明确”。
+- 薪资、截止时间和投递资格必须以最终投递页为准。
+
+## 开发与验证
 
 ```bash
+npm ci
+npm run check
+
 cd cli
-npm install
-npx tsx src/index.ts help          # 跑源码
-npx tsx src/ingest-enterprises.ts  # 重建名录 raw/enterprises/*.json → data/enterprises/roster.json
-npx tsx src/ingest-positions.ts    # (可选)把抓取快照入库为离线分片
-npm test                           # 冒烟测试
-npm run build                      # tsc → dist/
+npm run check
+npm run build
+npm pack --dry-run
 ```
 
-零运行时依赖(Node ≥18，用内置 fetch/zlib)。MIT。
+CLI 零运行时依赖，支持 Node.js ≥18。MIT。
