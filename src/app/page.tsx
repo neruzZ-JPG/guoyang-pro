@@ -5,13 +5,14 @@ import {
   Bot,
   Check,
   Copy,
-  Database,
   ExternalLink,
-  Globe2,
   Github,
+  MessageSquareText,
   RadioTower,
+  Sparkles,
   Target,
   Terminal,
+  UserRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useState } from "react";
@@ -19,14 +20,18 @@ import { useState } from "react";
 const PACKAGE_NAME = "@neruzz-jpg/guoyang-pro";
 const REPOSITORY_URL = "https://github.com/neruzZ-JPG/guoyang-pro";
 const INSTALL_COMMAND = `npx ${PACKAGE_NAME}@latest help`;
-const DEMO_COMMAND = "guoyang-pro search --enterprise 华润集团 --limit 5";
+const DEMO_COMMAND = `npx ${PACKAGE_NAME}@latest search --type 校招 --limit 5`;
 
-const PROMPT = `请先运行 \`${INSTALL_COMMAND}\` 了解命令，然后帮我规划国央企求职。
+const PROMPT = `你是我的国央企求职分析助手。请先在终端运行 \`${INSTALL_COMMAND}\` 了解可用命令。
 
-请先询问我的学历、专业、院校层级、意向城市、意向行业和招聘类型；
-再查询企业名录、实时岗位与招聘时间线，给出可执行的投递清单。
+开始前，请依次询问我的学历、专业、院校层级、意向城市、意向行业、招聘类型和关键词。
 
-请保留岗位来源，并提醒我以最终投递页面为准。`;
+然后请：
+1. 调用 guoyang-pro 查询企业名录、实时岗位和招聘时间线；
+2. 如果一次查询为 0，主动放宽条件继续查，不要把单次未命中说成全网没有岗位；
+3. 对岗位按匹配度、截止时间和投递价值进行分析；
+4. 输出“优先投递 / 可以尝试 / 继续观察”三档清单，并说明理由；
+5. 保留岗位来源、截止时间和投递地址，提醒我以官方投递页面为准。`;
 
 const FEATURES: Array<{
   icon: LucideIcon;
@@ -35,43 +40,43 @@ const FEATURES: Array<{
   bullets: string[];
 }> = [
   {
-    icon: Database,
-    title: "企业名录",
-    description: "集中浏览国央企信息，快速建立目标企业池。",
-    bullets: ["158+ 家参考企业", "行业与梯队筛选", "企业详情与关联岗位"],
+    icon: MessageSquareText,
+    title: "一段提示词开始",
+    description: "不需要记住参数。把提示词交给 AI，它会先询问你的背景和求职偏好。",
+    bullets: ["自动收集个人画像", "自动拆解求职目标", "适配 Claude Code / Codex / Cursor"],
   },
   {
     icon: RadioTower,
-    title: "实时岗位",
-    description: "按需查询公开招聘信息，减少在多个页面间反复搜索。",
-    bullets: ["多来源聚合", "投递入口与截止时间", "来源状态可核验"],
+    title: "AI 自动查询",
+    description: "AI 根据你的回答组合 CLI 参数，查询企业、实时岗位与招聘节奏。",
+    bullets: ["自动调用 guoyang-pro", "零结果时主动放宽条件", "保留来源和投递入口"],
   },
   {
     icon: Target,
-    title: "智能匹配",
-    description: "把个人偏好转成筛选条件，辅助安排投递优先级。",
-    bullets: ["学历与专业条件", "城市与行业偏好", "冲 / 稳 / 保参考"],
+    title: "输出投递计划",
+    description: "AI 不只罗列岗位，还会比较条件、解释理由并整理下一步行动。",
+    bullets: ["优先投递 / 可以尝试 / 继续观察", "匹配理由与风险提示", "可继续追问和调整"],
   },
 ];
 
 const FLOW = [
   {
-    icon: Globe2,
-    title: "数据来源",
-    meta: "公开招聘信息",
-    signal: "Online",
+    icon: UserRound,
+    title: "告诉 AI 你的需求",
+    meta: "学历 · 专业 · 城市 · 行业",
+    signal: "Prompt",
   },
   {
     icon: Terminal,
-    title: "guoyang-pro",
-    meta: "标准化命令输出",
-    signal: "stdout",
+    title: "AI 调用 guoyang-pro",
+    meta: "查询企业、岗位与日历",
+    signal: "Run",
   },
   {
     icon: Bot,
-    title: "AI 助手",
-    meta: "Claude Code · Codex · Cursor",
-    signal: "data",
+    title: "得到投递分析",
+    meta: "优先级、理由与下一步",
+    signal: "Plan",
   },
 ];
 
@@ -132,9 +137,9 @@ export default function Home() {
             国央企 <em>Pro</em>
           </a>
           <nav className="gp-nav-links" aria-label="主要导航">
-            <a href="#features">特性</a>
+            <a href="#ai">AI 使用</a>
             <a href="#workflow">工作流</a>
-            <a href="#demo">示例</a>
+            <a href="#demo">真实示例</a>
           </nav>
           <a className="gp-github" href={REPOSITORY_URL} target="_blank" rel="noreferrer">
             <Github size={16} aria-hidden="true" />
@@ -147,71 +152,71 @@ export default function Home() {
         <section className="gp-container gp-hero" aria-labelledby="hero-title">
           <div className="gp-hero-copy">
             <p className="gp-eyebrow">
-              <span>央国企求职助手</span>
+              <span>AI × 国央企求职</span>
               <span aria-hidden="true" />
-              <span>Terminal Product</span>
+              <span>Prompt First</span>
             </p>
             <h1 id="hero-title">
-              一条命令，
-              <br /><em>看见更多机会</em>
+              把提示词给 AI，
+              <br /><em>让它替你查与分析</em>
             </h1>
             <p className="gp-hero-description">
-              面向国央企求职的命令行工具。
-              <br />企业名录、实时岗位、智能匹配、招聘日历，
-              <br />让信息检索回归高效与专注。
+              复制一段提示词给 Claude Code、Codex 或 Cursor。
+              <br />AI 会询问你的求职画像，调用 guoyang-pro 查询真实岗位，
+              <br />再帮你比较机会、解释理由并整理投递计划。
             </p>
-            <div className="gp-command-strip" aria-label="运行命令">
-              <code>
-                <span>$</span> {INSTALL_COMMAND}
-              </code>
+            <div className="gp-hero-actions">
+              <CopyButton value={PROMPT} label="复制提示词给 AI" />
+              <a href="#demo">查看真实查询 <ArrowRight size={15} /></a>
+            </div>
+            <div className="gp-command-strip" aria-label="无需 AI 时的运行命令">
+              <span>也可以直接运行</span>
+              <code>{INSTALL_COMMAND}</code>
               <CopyButton value={INSTALL_COMMAND} compact />
             </div>
           </div>
 
-          <div className="gp-terminal" aria-label="命令行使用示例">
+          <div className="gp-terminal gp-ai-terminal" aria-label="AI 使用示例">
             <div className="gp-terminal-bar">
               <span className="gp-terminal-dots" aria-hidden="true">
                 <i />
                 <i />
                 <i />
               </span>
-              <span>guoyang-pro — zsh</span>
+              <span>AI 求职助手</span>
               <span />
             </div>
             <div className="gp-terminal-body">
-              <p className="gp-terminal-ready">✓ 数据源就绪</p>
-              <div className="gp-source-row">
-                <span><i /> 国聘网</span>
-                <b>实时</b>
+              <div className="gp-ai-message">
+                <span>YOU</span>
+                <p>帮我规划国央企求职，筛选适合我的岗位。</p>
               </div>
-              <div className="gp-source-row">
-                <span><i /> 国家大学生就业服务平台</span>
-                <b>实时</b>
+              <div className="gp-ai-message gp-ai-message-assistant">
+                <span>AI</span>
+                <p>先告诉我你的学历、专业、城市偏好和校招 / 社招意向。</p>
               </div>
               <div className="gp-terminal-rule" />
+              <p className="gp-terminal-ready">AI 正在调用 CLI</p>
               <p className="gp-terminal-command">
-                <span>$</span> guoyang-pro search
-                <br /><em>--enterprise 华润集团 --limit 5</em>
+                <span>$</span> {DEMO_COMMAND}
               </p>
-              <p className="gp-terminal-found">找到 5 个岗位</p>
-              <div className="gp-terminal-result">
-                <span>01</span>
-                <div><strong>投资分析岗</strong><small>深圳 · 硕士 · 校园招聘</small></div>
+              <p className="gp-terminal-found">2026-08-27 实测命中 5 条 · 实时结果会变化</p>
+              <div className="gp-ai-summary">
+                <span>AI</span>
+                <div>
+                  <strong>已找到可进一步分析的校招岗位</strong>
+                  <small>下一步：结合你的画像排序，并输出投递清单。</small>
+                </div>
               </div>
-              <div className="gp-terminal-result">
-                <span>02</span>
-                <div><strong>数字化运营岗</strong><small>北京 · 本科及以上 · 校园招聘</small></div>
-              </div>
-              <p className="gp-terminal-note">结果附带来源与投递地址 · 以官方页面为准</p>
             </div>
           </div>
         </section>
 
-        <section className="gp-section gp-container" id="features" aria-labelledby="features-title">
+        <section className="gp-section gp-container" id="ai" aria-labelledby="features-title">
           <div className="gp-section-heading">
-            <p className="gp-kicker">核心能力</p>
-            <h2 id="features-title">为求职决策而生</h2>
-            <p>从企业筛选到岗位核验，用更少的操作获得更清晰的结果。</p>
+            <p className="gp-kicker">AI 使用方式</p>
+            <h2 id="features-title">你描述目标，AI 完成查询与分析</h2>
+            <p>guoyang-pro 提供可靠的查询能力，AI 负责理解你的需求并把结果变成行动建议。</p>
           </div>
           <div className="gp-feature-grid">
             {FEATURES.map(({ icon: Icon, title, description, bullets }) => (
@@ -229,9 +234,9 @@ export default function Home() {
 
         <section className="gp-section gp-workflow gp-container" id="workflow" aria-labelledby="workflow-title">
           <div className="gp-section-heading">
-            <p className="gp-kicker">工作流</p>
-            <h2 id="workflow-title">数据进来，决策出去</h2>
-            <p>公开招聘信息经过标准化处理，再交给你熟悉的 AI 助手继续分析。</p>
+            <p className="gp-kicker">三步工作流</p>
+            <h2 id="workflow-title">从一句话，到一份投递计划</h2>
+            <p>不需要先研究 CLI 参数。AI 会根据你的回答选择命令、查询数据并继续追问。</p>
           </div>
           <div className="gp-flow">
             {FLOW.map(({ icon: Icon, title, meta, signal }, index) => (
@@ -262,27 +267,27 @@ export default function Home() {
             </div>
             <div className="gp-code-body">
               <p className="gp-code-command"><span>$</span> {DEMO_COMMAND}</p>
-              <p className="gp-code-status">✓ 查询完成 · 5 个结果 · 来源可核验</p>
+              <p className="gp-code-status">✓ 2026-08-27 实测 · 命中 5 条 · 实时 / 部分覆盖</p>
               <div className="gp-code-table">
-                <div className="gp-code-head"><span>岗位</span><span>地点</span><span>学历</span></div>
-                <div><strong>投资分析岗</strong><span>深圳</span><span>硕士</span></div>
-                <div><strong>数字化运营岗</strong><span>北京</span><span>本科+</span></div>
-                <div><strong>财务管理岗</strong><span>上海</span><span>本科+</span></div>
+                <div className="gp-code-head"><span>岗位</span><span>地点</span><span>来源</span></div>
+                <div><strong>测试技术开发工程师</strong><span>深圳</span><span>招商银行</span></div>
+                <div><strong>测试技术开发工程师</strong><span>杭州</span><span>招商银行</span></div>
+                <div><strong>后端开发工程师</strong><span>深圳</span><span>招商银行</span></div>
               </div>
               <div className="gp-code-footer">
-                <span><i /> complete</span>
+                <span><i /> 实时岗位会随招聘上下线变化</span>
                 <CopyButton value={DEMO_COMMAND} label="复制命令" />
               </div>
             </div>
           </div>
           <div className="gp-demo-copy">
-            <p className="gp-kicker">实际演示</p>
-            <h2 id="demo-title">从命令到结果，<br />只需几秒</h2>
-            <p>按照企业、行业、城市、学历与招聘类型组合筛选。输出保留来源和投递信息，方便继续核验与行动。</p>
+            <p className="gp-kicker">真实查询</p>
+            <h2 id="demo-title">示例不是摆设，<br />命令可以直接运行</h2>
+            <p>这条宽口径校招查询已在 2026-08-27 实测命中。岗位会随招聘上下线变化，因此页面展示实测日期，而不承诺固定数量。</p>
             <ul>
-              <li><Check size={15} /> 条件可组合</li>
-              <li><Check size={15} /> 结果可核验</li>
-              <li><Check size={15} /> 可直接交给 AI 助手</li>
+              <li><Check size={15} /> 使用已发布的 npm 包</li>
+              <li><Check size={15} /> 返回真实岗位与官方投递链接</li>
+              <li><Check size={15} /> AI 可继续筛选、比较与归纳</li>
             </ul>
             <a href={REPOSITORY_URL} target="_blank" rel="noreferrer">
               查看完整文档 <ExternalLink size={14} />
@@ -292,11 +297,11 @@ export default function Home() {
 
         <section className="gp-cta gp-container" aria-labelledby="cta-title">
           <div>
-            <p className="gp-kicker gp-kicker-light">开始使用</p>
-            <h2 id="cta-title">让终端成为你的求职助手</h2>
-            <p>复制一段提示词，在 Claude Code、Codex 或 Cursor 中开始规划。</p>
+            <p className="gp-kicker gp-kicker-light">推荐使用方式</p>
+            <h2 id="cta-title">把提示词给 AI，剩下的让它来做</h2>
+            <p>AI 会主动询问、调用 CLI、核验来源，并整理成可执行的投递计划。</p>
           </div>
-          <CopyButton value={PROMPT} label="复制提示词" />
+          <CopyButton value={PROMPT} label="复制完整提示词" />
         </section>
       </main>
 
@@ -304,7 +309,7 @@ export default function Home() {
         <div className="gp-container gp-footer-main">
           <div>
             <a className="gp-wordmark" href="#top">国央企 <em>Pro</em></a>
-            <p>企业名录 · 实时岗位 · 智能匹配</p>
+            <p>给 AI 一段提示词，让它帮你查岗位、做分析。</p>
           </div>
           <nav aria-label="页脚导航">
             <a href={`${REPOSITORY_URL}#快速开始`} target="_blank" rel="noreferrer">文档</a>

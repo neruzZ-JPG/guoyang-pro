@@ -251,10 +251,45 @@ a {
   line-height: 1.95;
 }
 
+.gp-hero-actions {
+  margin-top: 31px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.gp-hero-actions .copy-button {
+  min-width: 154px;
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.gp-hero-actions .copy-button:hover {
+  background: transparent;
+  color: var(--ink);
+}
+
+.gp-hero-actions > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: color 160ms ease, gap 160ms ease;
+}
+
+.gp-hero-actions > a:hover {
+  gap: 11px;
+  color: var(--ink);
+}
+
 .gp-command-strip {
   width: min(100%, 445px);
   min-height: 46px;
-  margin-top: 34px;
+  margin-top: 23px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -262,19 +297,21 @@ a {
   border-bottom: 1px solid var(--line-strong);
 }
 
+.gp-command-strip > span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 10px;
+}
+
 .gp-command-strip code {
   min-width: 0;
+  flex: 1;
   overflow: hidden;
   color: var(--ink-soft);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 9px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.gp-command-strip code span {
-  margin-right: 6px;
-  color: var(--muted);
 }
 
 .gp-terminal,
@@ -320,6 +357,56 @@ a {
 
 .gp-terminal-body p {
   margin: 0;
+}
+
+.gp-ai-message {
+  padding: 12px 0;
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 12px;
+  border-bottom: 1px solid #2e302b;
+}
+
+.gp-ai-message > span,
+.gp-ai-summary > span {
+  color: #777b72;
+  font-size: 8px;
+  letter-spacing: 0.12em;
+}
+
+.gp-ai-message p {
+  color: #e4e5df;
+}
+
+.gp-ai-message-assistant p {
+  color: #b7bab0;
+}
+
+.gp-ai-summary {
+  margin-top: 18px;
+  padding: 15px;
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 12px;
+  border: 1px solid #343630;
+  background: #1e1f1c;
+}
+
+.gp-ai-summary strong,
+.gp-ai-summary small {
+  display: block;
+}
+
+.gp-ai-summary strong {
+  color: #e9eae4;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.gp-ai-summary small {
+  margin-top: 5px;
+  color: #858980;
+  font-size: 8px;
 }
 
 .gp-terminal-ready,
@@ -370,6 +457,10 @@ a {
 
 .gp-terminal-command span {
   color: var(--green);
+}
+
+.gp-terminal-command {
+  overflow-wrap: anywhere;
 }
 
 .gp-terminal-command em {
@@ -612,6 +703,8 @@ a {
 
 .gp-code-command {
   color: #e7e8e2;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
 }
 
 .gp-code-command span,
@@ -851,6 +944,12 @@ a {
 
   .gp-hero-description {
     font-size: 14px;
+  }
+
+  .gp-hero-actions {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 17px;
   }
 
   .gp-terminal-body,

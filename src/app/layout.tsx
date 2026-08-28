@@ -3,13 +3,13 @@ import { SITE_URL } from "../lib/site";
 import "./marketing.css";
 
 export const metadata: Metadata = {
-  title: "国央企 Pro — 企业、岗位与求职规划 CLI",
+  title: "国央企 Pro — 把提示词给 AI，让它帮你查岗位",
   description:
-    "面向国央企求职场景的命令行助手：企业查询、岗位搜索、招聘日历、智能匹配与投递规划。",
+    "把提示词交给 Claude Code、Codex 或 Cursor，让 AI 调用 guoyang-pro 查询真实岗位、比较机会并生成投递计划。",
   metadataBase: new URL(SITE_URL),
   openGraph: {
-    title: "国央企 Pro · 一条命令找到值得投的机会",
-    description: "企业名录、岗位搜索、招聘日历、智能匹配与求职规划。",
+    title: "国央企 Pro · 把提示词给 AI，让它帮你查岗位",
+    description: "AI 自动询问求职画像、调用 CLI 查询真实岗位，并整理可执行的投递清单。",
     url: SITE_URL,
   },
   keywords: [
