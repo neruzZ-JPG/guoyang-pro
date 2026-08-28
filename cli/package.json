@@ -2,7 +2,7 @@
   "name": "@neruzz-jpg/guoyang-pro",
   "version": "0.2.0",
   "description": "国央企求职 CLI — 可溯源企业名录、实时多源岗位、子公司归一化、短期缓存与招聘时间线，零运行时依赖",
-  "homepage": "https://github.com/neruzZ-JPG/guoyang-pro#readme",
+  "homepage": "https://guoyang-pro.vercel.app/",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/neruzZ-JPG/guoyang-pro.git",

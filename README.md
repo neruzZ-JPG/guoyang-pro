@@ -2,21 +2,27 @@
 
 # 国央企 Pro
 
-**一条命令，看见更多机会**
+**找到适合你的岗位，知道下一份该投哪里**
 
-企业名录 · 岗位搜索 · 招聘日历 · 智能匹配 · 求职规划
+找机会 · 看要求 · 排优先级 · 定投递计划
 
-面向国央企求职的命令行工具，让信息检索回归高效与专注。
+告诉 AI 你的专业、城市和求职偏好，它会帮你寻找机会、比较岗位并整理下一步行动。
 
 [![npm version](https://img.shields.io/npm/v/@neruzz-jpg/guoyang-pro?color=18181b&label=npm)](https://www.npmjs.com/package/@neruzz-jpg/guoyang-pro)
 [![Node.js](https://img.shields.io/badge/Node.js-%E2%89%A518-18181b)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-18181b.svg)](LICENSE)
 
-```bash
-npx @neruzz-jpg/guoyang-pro@latest help
+[在线体验](https://guoyang-pro.vercel.app/) · [npm](https://www.npmjs.com/package/@neruzz-jpg/guoyang-pro)
+
+```text
+你是我的国央企求职助手。
+
+请询问我的学历、专业、院校层级、意向城市、意向行业、招聘类型和关键词；
+然后帮我寻找和分析岗位，输出“优先投递 / 可以尝试 / 继续观察”
+三档清单，并告诉我推荐理由、截止时间和投递入口。
 ```
 
-[快速开始](#快速开始) · [常用场景](#常用场景) · [配合-ai-助手](#配合-ai-助手) · [命令一览](#命令一览)
+[交给 AI](#把提示词交给-ai) · [快速开始](#快速开始) · [常用场景](#常用场景) · [命令一览](#命令一览)
 
 </div>
 
@@ -24,20 +30,44 @@ npx @neruzz-jpg/guoyang-pro@latest help
 
 ---
 
+## 复制给 AI，开始找岗位
+
+将下面的完整提示词复制给 Claude Code、Codex 或 Cursor：
+
+```text
+你是我的国央企求职助手。请使用 `npx @neruzz-jpg/guoyang-pro@latest help` 提供的能力帮我规划求职。
+
+开始前，请依次询问我的学历、专业、院校层级、意向城市、意向行业、招聘类型和关键词。
+
+然后请：
+1. 帮我寻找合适的企业和岗位；
+2. 如果暂时没有合适结果，调整条件继续寻找；
+3. 比较岗位要求、截止时间和我的匹配程度；
+4. 输出“优先投递 / 可以尝试 / 继续观察”三档清单，并说明理由；
+5. 告诉我截止时间和投递入口，提醒我以官方页面为准。
+```
+
+AI 会完成这条链路：
+
+```text
+了解你的情况 → 寻找机会 → 比较岗位 → 给出投递顺序
+```
+
 ## 它能做什么
 
 | 能力 | 适合解决的问题 |
 |---|---|
 | 🏢 企业查询 | 按行业、梯队、监管体系浏览国央企，查看企业详情 |
 | 🔎 岗位搜索 | 按企业、城市、学历、专业与招聘类型筛选岗位 |
+| 🤖 AI 协作 | 让 AI 继续追问、比较机会并给出下一步行动 |
 | 🎯 智能匹配 | 结合个人意向整理更值得关注的岗位与方向 |
-| 📊 求职规划 | 生成冲 / 稳 / 保参考组合，辅助安排投递优先级 |
+| 📊 求职规划 | 生成分档投递清单，辅助安排投递优先级 |
 | 📅 招聘日历 | 查看典型招聘节奏，提前准备笔试、面试与投递 |
 | 🔗 来源核验 | 查询结果保留来源信息，方便回到投递页面确认 |
 
 ## 快速开始
 
-无需全局安装，直接运行：
+如果希望自己直接使用 CLI，无需全局安装：
 
 ```bash
 npx @neruzz-jpg/guoyang-pro@latest help
@@ -67,15 +97,11 @@ guoyang-pro enterprises --sector 金融银行
 ### 2. 搜索在招岗位
 
 ```bash
-# 北京 · 能源电力 · 校园招聘
-guoyang-pro search \
-  --sector 能源电力 \
-  --location 北京 \
-  --type 校招 \
-  --limit 20
+# 查看当前校招机会
+npx @neruzz-jpg/guoyang-pro@latest search --type 校招 --limit 5
 
-# 查看某家企业的相关岗位
-guoyang-pro enterprise 国家电网 --limit 20
+# 再根据结果逐步增加城市、行业、学历等条件
+guoyang-pro search --location 北京 --limit 5
 ```
 
 ### 3. 生成匹配与投递参考
@@ -100,19 +126,6 @@ guoyang-pro recommend \
 guoyang-pro calendar
 guoyang-pro hot --by sector
 guoyang-pro stats
-```
-
-## 配合 AI 助手
-
-将下面内容复制给 Claude Code、Codex 或 Cursor：
-
-```text
-请先运行 `npx @neruzz-jpg/guoyang-pro@latest help` 了解可用命令，然后帮我规划国央企求职。
-
-请先询问我的学历、专业、院校层级、意向城市、意向行业和招聘类型，
-再使用 CLI 查询企业、岗位与招聘时间线，给出可执行的投递清单。
-
-请保留岗位来源，并提醒我以最终投递页面为准。
 ```
 
 ## 命令一览
@@ -141,6 +154,7 @@ guoyang-pro help
 
 - 岗位状态、截止时间、资格条件与薪资以最终投递页面为准。
 - 搜索结果会标注来源和覆盖状态；零结果不等于所有渠道均无岗位。
+- 岗位会随招聘上下线变化，建议定期重新查询。
 - 企业梯队、匹配度和冲稳保属于求职参考，不代表官方评级或录取结论。
 - 本工具不要求用户上传账号密码、简历或其他敏感个人信息。
 
