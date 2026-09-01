@@ -1,0 +1,44 @@
+{
+  "code": 200,
+  "msg": "OK",
+  "data": {
+    "job_id": "195024114728046183",
+    "job_name": "宣传干事",
+    "company_id": "10685285543526575",
+    "company_name": "中国东方电气集团有限公司",
+    "recruitment_type": "1161T1j6",
+    "recruitment_type_cn": "校园招聘",
+    "nature": "115xW5oQ",
+    "nature_cn": "校招",
+    "amount": 1,
+    "min_wage": 0,
+    "max_wage": 0,
+    "wage_unit_cn": "元/月",
+    "months": 12,
+    "is_negotiable": true,
+    "education_cn": "硕士",
+    "experience_cn": "应届生",
+    "major_cn": [
+      "新闻传播学类"
+    ],
+    "start_time": "2026-08-03 08:30:00",
+    "end_time": "2026-09-02 23:59:59",
+    "status": 1,
+    "district_list": [
+      {
+        "area_code": "000000.510000.510100",
+        "area_cn": "成都",
+        "province": "510000",
+        "city": "510100"
+      }
+    ],
+    "contents": "工作职责：负责新闻采写、宣传策划、新媒体运营、摄影摄像及媒体接待。\n任职要求：2027届及2026届未就业毕业生，硕士研究生及以上学历；中文、新闻学、传播学、网络新媒体等专业；中国共产党党员。",
+    "company_info": {
+      "name": "中国东方电气集团有限公司",
+      "nature": "11AzDak",
+      "nature_cn": "国企",
+      "industry_cn": "专用设备制造业",
+      "scale_cn": "10000-30000人"
+    }
+  }
+}

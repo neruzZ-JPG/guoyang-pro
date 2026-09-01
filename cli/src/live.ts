@@ -1,7 +1,7 @@
 // cli/src/live.ts
 // 实时检索编排:跨已接通的源适配器并发拉取,用名录把"半成品"岗位归一化为 Position
 // (补 enterprise_id/梯队/行业、派生用工性质),合并去重后返回。
-import { liveAdapters, sourcePriority } from "./adapters/index.js";
+import { adapterById, liveAdapters, sourcePriority } from "./adapters/index.js";
 import type { FetchParams, RawPosition } from "./adapters/types.js";
 import { allEnterprises, filterPositions } from "./loader.js";
 import { createHash } from "node:crypto";
@@ -259,8 +259,9 @@ export async function liveSearch(params: FetchParams): Promise<LiveResult> {
   );
   const adapterParams = needsPostNormalization
     ? {
-        ...params,
+      ...params,
         enterprise: undefined,
+        enterprise_hint: params.enterprise_hint ?? params.enterprise,
         sector: undefined,
         employment_type: undefined,
         education: undefined,
@@ -322,6 +323,44 @@ export async function liveSearch(params: FetchParams): Promise<LiveResult> {
     total: positions.length,
     positions,
   };
+}
+
+export async function livePositionDetail(id: string): Promise<{
+  position?: Position;
+  error?: string;
+}> {
+  const separator = id.indexOf(":");
+  const sourceId = separator > 0 ? id.slice(0, separator) : undefined;
+  const sourcePositionId = separator > 0 ? id.slice(separator + 1) : id;
+  if (!sourcePositionId) return { error: `invalid position id: ${id}` };
+
+  const candidates = sourceId
+    ? [adapterById(sourceId)].filter(
+        (adapter): adapter is NonNullable<typeof adapter> => !!adapter?.fetchDetail,
+      )
+    : liveAdapters().filter((adapter) => !!adapter.fetchDetail);
+  if (sourceId && candidates.length === 0) {
+    return { error: `source ${sourceId} does not support live detail lookup` };
+  }
+  if (candidates.length === 0) {
+    return { error: "no live source supports detail lookup" };
+  }
+
+  const errors: string[] = [];
+  for (const adapter of candidates) {
+    try {
+      const result = await adapter.fetchDetail!(sourcePositionId);
+      if (result.ok && result.position) {
+        return {
+          position: normalizePosition(result.position, allEnterprises(), result.fetched_at),
+        };
+      }
+      errors.push(`${adapter.id}: ${result.error ?? "position not found"}`);
+    } catch (error: any) {
+      errors.push(`${adapter.id}: ${error?.message ?? String(error)}`);
+    }
+  }
+  return { error: `live detail lookup failed: ${errors.join("; ")}` };
 }
 
 export function isPositionOpen(position: Position): boolean {

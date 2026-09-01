@@ -181,7 +181,13 @@ export function loadPositionSnapshot(
 }
 
 export function cachedPositionById(id: string): Position | undefined {
-  return loadPositionCache(24)?.positions.find((p) => p.id === id && isPositionOpen(p));
+  return loadPositionCache(24)?.positions.find((p) =>
+    isPositionOpen(p) && (
+      p.id === id ||
+      p.source_position_id === id ||
+      `${p.source_id}:${p.source_position_id}` === id
+    )
+  );
 }
 
 export function hasPositionCache(): boolean {
