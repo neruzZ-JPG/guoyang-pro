@@ -40,6 +40,10 @@ guoyang-pro enterprise 国家电网
 # 查看当前校招机会
 guoyang-pro search --type 校招 --limit 5
 
+# 国聘岗位即使未进入最近搜索缓存，也可按 ID 实时核验详情
+guoyang-pro detail --id 195024114728046183
+guoyang-pro detail --id iguopin:195024114728046183
+
 # 匹配与规划
 guoyang-pro match --sector 电信运营 --keywords 数据,算法
 guoyang-pro recommend --education 本科 --school-tier 211 --sector 金融银行
@@ -54,6 +58,8 @@ guoyang-pro stats
 
 - 查询结果保留来源信息，重要条件请回到最终投递页面核验。
 - 零结果只代表当前查询范围未命中，不代表所有渠道均无岗位。
+- 国聘搜索会优先把企业名称和可识别城市下推到上游，再在本地复核专业、关键词等条件，降低固定扫描窗口漏检。
+- `detail --id` 在缓存和离线快照未命中时，会向支持该来源的公开详情接口实时查询；目前支持国聘岗位 ID。
 - 岗位会随招聘上下线变化，建议定期重新查询。
 - 企业梯队、匹配度和冲稳保属于求职参考，不代表官方评级或录取结论。
 

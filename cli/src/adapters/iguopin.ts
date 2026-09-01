@@ -8,22 +8,31 @@
 //   node:https 为内置模块,保持零依赖。自动处理 gzip/deflate/br 解压。
 import { request } from "node:https";
 import { gunzipSync, inflateSync, brotliDecompressSync } from "node:zlib";
-import type { SourceAdapter, FetchParams, FetchResult, RawPosition } from "./types.js";
+import type {
+  DetailResult, SourceAdapter, FetchParams, FetchResult, RawPosition,
+} from "./types.js";
 import { inferSector, type RecruitType } from "../codes.js";
 
 const API = "https://gp-api.iguopin.com/api/jobs/v1/list";
+const DETAIL_API = "https://gp-api.iguopin.com/api/jobs/v1/info";
+const DISTRICT_API = "https://gp-api.iguopin.com/api/base/districts/v1/tree?code=000000&level=2";
 const TOTAL_TIMEOUT_MS = 20_000;
 
-function postJson(body: Record<string, unknown>, timeoutMs = 12000): Promise<any> {
+function requestJson(
+  url: string,
+  options: { method?: "GET" | "POST"; body?: Record<string, unknown>; timeoutMs?: number } = {},
+): Promise<any> {
   return new Promise((resolve, reject) => {
-    const u = new URL(API);
-    const data = Buffer.from(JSON.stringify(body));
+    const u = new URL(url);
+    const method = options.method ?? "GET";
+    const data = options.body ? Buffer.from(JSON.stringify(options.body)) : undefined;
     const req = request(
       {
-        hostname: u.hostname, path: u.pathname, method: "POST", port: 443,
+        hostname: u.hostname, path: `${u.pathname}${u.search}`, method, port: 443,
         headers: {
-          "Content-Type": "application/json",
-          "Content-Length": data.length,
+          ...(data
+            ? { "Content-Type": "application/json", "Content-Length": data.length }
+            : {}),
           "Origin": "https://www.iguopin.com",
           "Referer": "https://www.iguopin.com/",
           "Accept-Encoding": "gzip, deflate, br",
@@ -58,17 +67,40 @@ function postJson(body: Record<string, unknown>, timeoutMs = 12000): Promise<any
     );
     const absoluteTimer = setTimeout(
       () => req.destroy(new Error("absolute timeout")),
-      timeoutMs,
+      options.timeoutMs ?? 12_000,
     );
     req.on("error", (error) => {
       clearTimeout(absoluteTimer);
       reject(error);
     });
-    req.setTimeout(timeoutMs, () => req.destroy(new Error("timeout")));
+    req.setTimeout(options.timeoutMs ?? 12_000, () => req.destroy(new Error("timeout")));
     req.once("close", () => clearTimeout(absoluteTimer));
-    req.write(data);
+    if (data) req.write(data);
     req.end();
   });
+}
+
+function postJson(body: Record<string, unknown>, timeoutMs = 12_000): Promise<any> {
+  return requestJson(API, { method: "POST", body, timeoutMs });
+}
+
+type IGuopinTransport = {
+  postList: (body: Record<string, unknown>, timeoutMs?: number) => Promise<any>;
+  getJson: (url: string) => Promise<any>;
+};
+
+const defaultTransport: IGuopinTransport = {
+  postList: postJson,
+  getJson: (url) => requestJson(url),
+};
+
+let http: IGuopinTransport = defaultTransport;
+
+export function setIGuopinTransportForTest(
+  transport?: Partial<IGuopinTransport>,
+): void {
+  http = transport ? { ...defaultTransport, ...transport } : defaultTransport;
+  districtTreePromise = undefined;
 }
 
 const RECRUIT_CODE: Record<RecruitType, string | null> = {
@@ -123,6 +155,32 @@ function majorOf(rec: any): string | undefined {
   return undefined;
 }
 
+function descriptionFields(contents: unknown): {
+  desc?: string;
+  requirements?: string;
+  political?: string;
+} {
+  if (typeof contents !== "string") return {};
+  const clean = contents
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\r/g, "")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  if (!clean) return {};
+  const marker = clean.search(/(?:任职要求|岗位要求|资格条件)[：:]/);
+  const desc = marker >= 0 ? clean.slice(0, marker).trim() : clean;
+  const requirements = marker >= 0 ? clean.slice(marker).trim() : undefined;
+  return {
+    desc: desc || undefined,
+    requirements,
+    political: /中共党员|中国共产党党员|党员优先/.test(clean)
+      ? "中共党员或相关要求（以原文为准）"
+      : undefined,
+  };
+}
+
 // 导出供离线 fixture 单测:把国聘一条原始记录映射为 RawPosition。
 export function parseRecord(rec: any): RawPosition | null {
   const sourcePositionId = String(rec.job_id ?? "");
@@ -136,6 +194,7 @@ export function parseRecord(rec: any): RawPosition | null {
   const recruitType = recruitTypeOf(rec.recruitment_type_cn);
   const sector = inferSector(industry) || inferSector(enterpriseName);
   const salary = salaryRef(rec);
+  const description = descriptionFields(rec.contents);
   const warnings: string[] = [];
   if (sector && industry) warnings.push(`行业由国聘企业行业“${industry}”归一化`);
   if (recruitType === "unknown") warnings.push("国聘招聘类型字段缺失或未知，本岗位标为 unknown");
@@ -152,7 +211,9 @@ export function parseRecord(rec: any): RawPosition | null {
     major: majorOf(rec),
     salary_ref: salary.value,
     experience: rec.experience_cn || undefined,
-    desc: typeof rec.contents === "string" ? rec.contents.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 600) : undefined,
+    desc: description.desc,
+    requirements: description.requirements,
+    political: description.political,
     remarks: [
       rec.nature_cn,
       rec.company_info?.nature_cn ? `单位性质:${rec.company_info.nature_cn}` : "",
@@ -185,12 +246,76 @@ export function responseError(json: any): string | undefined {
   return undefined;
 }
 
+export function detailResponseError(json: any): string | undefined {
+  if (!json || typeof json !== "object") return "malformed response";
+  if (json.code !== 200) return `code=${json.code} msg=${json.msg}`;
+  if (!json.data || typeof json.data !== "object") return "missing response data";
+  return undefined;
+}
+
+type DistrictNode = {
+  value?: string;
+  label?: string;
+  name?: string;
+  parent_code?: string;
+  children?: DistrictNode[] | null;
+};
+
+let districtTreePromise: Promise<DistrictNode[]> | undefined;
+
+function normalizedDistrictName(value: string): string {
+  return value.normalize("NFKC").replace(/省|市|自治区|特别行政区|\s/g, "");
+}
+
+function districtPaths(nodes: DistrictNode[], parents: string[] = []): {
+  code: string;
+  label: string;
+}[] {
+  const out: { code: string; label: string }[] = [];
+  for (const node of nodes) {
+    const value = String(node.value ?? "");
+    if (!value) continue;
+    const path = [...parents, value];
+    if (value !== "000000") {
+      out.push({
+        code: path.join("."),
+        label: String(node.label || node.name || ""),
+      });
+    }
+    if (node.children?.length) out.push(...districtPaths(node.children, path));
+  }
+  return out;
+}
+
+async function resolveDistrictCodes(
+  location: string | undefined,
+  getJson: (url: string) => Promise<any>,
+): Promise<string[]> {
+  if (!location) return [];
+  districtTreePromise ??= getJson(DISTRICT_API)
+    .then((json) => {
+      if (json?.code !== 200 || !Array.isArray(json?.data)) {
+        throw new Error(`district tree: code=${json?.code} msg=${json?.msg}`);
+      }
+      return json.data as DistrictNode[];
+    })
+    .catch((error) => {
+      districtTreePromise = undefined;
+      throw error;
+    });
+  const target = normalizedDistrictName(location);
+  const paths = districtPaths(await districtTreePromise);
+  return [...new Set(paths
+    .filter(({ label }) => normalizedDistrictName(label) === target)
+    .map(({ code }) => code))];
+}
+
 function includes(haystack: unknown, needle?: string): boolean {
   return !needle || String(haystack ?? "").toLowerCase().includes(needle.toLowerCase());
 }
 
 function matchesSourceFilters(p: RawPosition, params: FetchParams): boolean {
-  if (!includes(p.enterprise_name, params.enterprise)) return false;
+  if (!includes(p.enterprise_name, params.enterprise ?? params.enterprise_hint)) return false;
   if (!includes(p.work_location, params.location)) return false;
   if (params.recruit_type && p.recruit_type !== params.recruit_type) return false;
   if (params.sector && p.sector !== params.sector) return false;
@@ -216,6 +341,44 @@ const adapter: SourceAdapter = {
   priority: 60,
   coverage: "经国聘发布且单位性质代码明确为央企/国企的校园、社会、实习及未标注岗位。",
   quality: "企业性质、招聘类型、地点、学历和薪资来自国聘列表；行业由企业行业字段保守归一化。",
+  async fetchDetail(sourcePositionId: string): Promise<DetailResult> {
+    const fetchedAt = new Date().toISOString();
+    if (!/^\d+$/.test(sourcePositionId)) {
+      return {
+        ok: false, source: this.id, fetched_at: fetchedAt,
+        error: "国聘岗位 id 必须为数字",
+      };
+    }
+    try {
+      const json = await http.getJson(
+        `${DETAIL_API}?id=${encodeURIComponent(sourcePositionId)}`,
+      );
+      const protocolError = detailResponseError(json);
+      if (protocolError) {
+        return {
+          ok: false, source: this.id, fetched_at: fetchedAt, error: protocolError,
+        };
+      }
+      if (Number(json.data.status) !== 1) {
+        return {
+          ok: false, source: this.id, fetched_at: fetchedAt,
+          error: `position ${sourcePositionId} is not active`,
+        };
+      }
+      const position = parseRecord(json.data);
+      return position
+        ? { ok: true, source: this.id, fetched_at: fetchedAt, position }
+        : {
+            ok: false, source: this.id, fetched_at: fetchedAt,
+            error: `position ${sourcePositionId} has incomplete detail data`,
+          };
+    } catch (error: any) {
+      return {
+        ok: false, source: this.id, fetched_at: fetchedAt,
+        error: error?.message ?? String(error),
+      };
+    }
+  },
   async fetch(params: FetchParams): Promise<FetchResult> {
     const fetchedAt = new Date().toISOString();
     const requestedLimit = params.limit ?? 50;
@@ -237,6 +400,13 @@ const adapter: SourceAdapter = {
       const code = RECRUIT_CODE[params.recruit_type];
       if (code) recruitment_type.push(code);
     }
+    let district: string[] = [];
+    try {
+      district = await resolveDistrictCodes(params.location, http.getJson);
+    } catch {
+      // 地区树失败时仍保留原来的全局实时扫描和本地复核。
+    }
+    const enterpriseHint = params.enterprise ?? params.enterprise_hint;
 
     const out: RawPosition[] = [];
     const seen = new Set<string>();
@@ -251,8 +421,10 @@ const adapter: SourceAdapter = {
         if (remainingMs <= 0) throw new Error("overall timeout");
         const body: Record<string, unknown> = { page, page_size: pageSize, company_nature };
         if (recruitment_type.length) body.recruitment_type = recruitment_type;
+        if (district.length) body.district = district;
+        if (enterpriseHint) body.company_name = enterpriseHint;
         // keyword 服务端参数实测会返回大量无关记录，统一在客户端复核，避免错误下推漏召回。
-        const json = await postJson(body, Math.min(12_000, remainingMs));
+        const json = await http.postList(body, Math.min(12_000, remainingMs));
         const protocolError = responseError(json);
         if (protocolError) {
           return out.length > 0

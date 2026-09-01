@@ -52,6 +52,11 @@ export default adapter;
 
 接通后在 `src/adapters/index.ts` 注册到 `ADAPTERS`。
 
+适配器若有可公开访问的详情接口，应实现可选
+`fetchDetail(sourcePositionId)`；`detail --id` 在缓存/快照未命中时使用该能力
+实时兜底。列表筛选只有经过真实请求验证不会降低召回时才允许下推，且下推后
+仍需本地复核。
+
 ### 适配器开发硬要求
 - **零运行时依赖**：只用 Node 内置(`fetch`、`zlib`)。不要 import 第三方包。
 - **真接通才 `live:true`**：必须 curl/实测能拉到真实岗位记录；拿不到就 `live:false` 并在 notes 说明(诚实披露，参考 job-pro 的 honest-stub)。

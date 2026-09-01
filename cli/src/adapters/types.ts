@@ -10,6 +10,7 @@ export type FetchParams = {
   location?: string;     // 城市
   recruit_type?: RecruitType; // 校招/社招/实习
   enterprise?: string;   // 指定企业名/简称
+  enterprise_hint?: string; // 用户原始企业查询，供支持企业名下推的适配器使用
   enterprise_id?: string; // 归一化企业 id（适配器通常无法直接下推）
   tier?: string;
   education?: string;
@@ -39,6 +40,14 @@ export type FetchResult = {
   note?: string;
 };
 
+export type DetailResult = {
+  ok: boolean;
+  source: string;
+  fetched_at: string;
+  position?: RawPosition;
+  error?: string;
+};
+
 export type SourceAdapter = {
   id: string;             // "iguopin" | "ncss" | "sgcc" ...
   name: string;           // 中文名
@@ -51,4 +60,5 @@ export type SourceAdapter = {
   disabled_reason?: string;
   quality?: string;       // 字段质量/覆盖边界的诚实披露
   fetch(params: FetchParams): Promise<FetchResult>;
+  fetchDetail?(sourcePositionId: string): Promise<DetailResult>;
 };

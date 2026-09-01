@@ -7,7 +7,9 @@ import {
 } from "./loader.js";
 import { recommend } from "./recommend.js";
 import { matchPositions } from "./match.js";
-import { liveSearch, matchEnterprise, type LiveResult } from "./live.js";
+import {
+  livePositionDetail, liveSearch, matchEnterprise, type LiveResult,
+} from "./live.js";
 import { ADAPTERS, liveAdapters } from "./adapters/index.js";
 import {
   cachedPositionById, loadPositionSnapshot, positionCacheKey, positionCachePath,
@@ -49,6 +51,7 @@ Usage: guoyang-pro <verb> [flags]
                   --cache-only  仅查询24小时内实时缓存(不联网)
                   --offline  仅用本地快照(不联网),--year <年> 指定快照年份
   detail        岗位详情  --id <id>  [--year <离线快照年>]
+                  缓存未命中时按来源实时查询详情(当前支持国聘裸ID/iguopin:ID)
 
 规划:
   recommend     冲/稳/保(启发式估算:梯队+学历门槛 vs 院校层级+学历)
@@ -263,6 +266,7 @@ function queryParams(flags: Record<string, string>, defaultLimit = 50) {
     location: flags.location,
     recruit_type: validatedRecruitType(flags.type),
     enterprise: knownEnterprise ? undefined : enterprise,
+    enterprise_hint: knownEnterprise?.name ?? enterprise,
     enterprise_id: knownEnterprise?.id,
     tier: validatedTier(flags.tier),
     education: flags.education,
@@ -533,7 +537,7 @@ const VERBS: Record<string, VerbFn> = {
     if (healthy === 0) process.exitCode = 2;
   },
 
-  detail(flags) {
+  async detail(flags) {
     const id = flags.id;
     if (!id) { console.error("--id required"); process.exitCode = 1; return; }
     const year = validatedYear(flags.year);
@@ -545,10 +549,28 @@ const VERBS: Record<string, VerbFn> = {
       : cachedPositionById(id) ?? loadYear(year).find(
           (p) => p.id === id,
         );
+    if (!found && !flags.year) {
+      const liveDetail = await livePositionDetail(id);
+      if (liveDetail.position) {
+        printJson({
+          ...liveDetail.position,
+          detail_mode: "live",
+        });
+        return;
+      }
+      printJson({
+        ok: false,
+        error: liveDetail.error ??
+          `position ${id} not found in recent cache, ${year} snapshot or supported live sources`,
+        cache_path: positionCachePath(),
+      });
+      process.exitCode = 1;
+      return;
+    }
     if (!found) {
       printJson({
         ok: false,
-        error: `position ${id} not found in recent cache or ${year} snapshot`,
+        error: `position ${id} not found in ${year} snapshot`,
         cache_path: positionCachePath(),
       });
       process.exitCode = 1;

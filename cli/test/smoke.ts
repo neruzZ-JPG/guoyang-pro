@@ -10,9 +10,11 @@ import { recommend } from "../src/recommend.js";
 import { matchPositions } from "../src/match.js";
 import {
   default as iguopinAdapter,
+  detailResponseError as iguopinDetailResponseError,
   isStateOwnedRecord,
   parseRecord,
   responseError as iguopinResponseError,
+  setIGuopinTransportForTest,
 } from "../src/adapters/iguopin.js";
 import {
   default as ncssAdapter,
@@ -89,6 +91,76 @@ if (existsSync(fixture)) {
   check("解析: apply_url 指向国聘详情", parsed.every((p) => (p.apply_url ?? "").includes("iguopin.com/job/detail")));
   console.log(`  样例解析: ${parsed[0].enterprise_name} | ${parsed[0].title} | ${parsed[0].education} | ${parsed[0].work_location} | ${parsed[0].salary_ref}`);
 }
+const detailFixture = JSON.parse(readFileSync(
+  join(__dirname, "fixtures", "iguopin-detail.json"),
+  "utf-8",
+));
+const detailParsed = parseRecord(detailFixture.data);
+check("国聘详情: 错误 case 可解析", detailParsed?.id === "195024114728046183");
+check("国聘详情: 地点/专业/学历完整", (
+  detailParsed?.work_location === "成都" &&
+  detailParsed.major === "新闻传播学类" &&
+  detailParsed.education === "硕士"
+));
+check("国聘详情: 识别党员要求", detailParsed?.political?.includes("党员") === true);
+check("国聘详情: 拆分职责与任职要求", (
+  detailParsed?.desc?.includes("新闻采写") === true &&
+  detailParsed.requirements?.includes("2027届") === true
+));
+check("国聘详情: 严格响应 code", !!iguopinDetailResponseError({ code: 404 }));
+
+let detailUrl = "";
+const listBodies: Record<string, unknown>[] = [];
+setIGuopinTransportForTest({
+  getJson: async (url) => {
+    if (url.includes("/api/jobs/v1/info")) {
+      detailUrl = url;
+      return detailFixture;
+    }
+    return {
+      code: 200,
+      data: [{
+        value: "000000",
+        label: "中国",
+        children: [{
+          value: "510000",
+          label: "四川",
+          children: [{ value: "510100", label: "成都", children: null }],
+        }],
+      }],
+    };
+  },
+  postList: async (body) => {
+    listBodies.push(body);
+    return { code: 200, msg: "OK", data: { list: [detailFixture.data] } };
+  },
+});
+const liveDetail = await iguopinAdapter.fetchDetail!("195024114728046183");
+check("国聘详情: 实时接口命中错误 case", (
+  liveDetail.ok &&
+  liveDetail.position?.title === "宣传干事" &&
+  detailUrl.endsWith("id=195024114728046183")
+));
+const targeted = await iguopinAdapter.fetch({
+  enterprise: "中国东方电气集团有限公司",
+  location: "成都",
+  recruit_type: "campus",
+  major: "新闻传播",
+  keyword: "宣传",
+  limit: 5,
+  scan_limit: 100,
+});
+check("国聘搜索: 定向条件可召回错误 case", (
+  targeted.positions.some((p) => p.id === "195024114728046183")
+));
+check("国聘搜索: 城市代码数组下推", (
+  Array.isArray(listBodies[0]?.district) &&
+  (listBodies[0].district as string[]).includes("000000.510000.510100")
+));
+check("国聘搜索: 企业名称下推", (
+  listBodies[0]?.company_name === "中国东方电气集团有限公司"
+));
+setIGuopinTransportForTest();
 
 // 名录匹配(live.ts normalize 依赖此路径把岗位归属到企业→补梯队/行业)
 const icbc = findEnterprise("中国工商银行股份有限公司");
