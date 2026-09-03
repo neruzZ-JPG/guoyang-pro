@@ -6,13 +6,11 @@ import cmb from "./cmb.js";
 import csg from "./csg.js";
 import iguopin from "./iguopin.js";
 import ncss from "./ncss.js";
-import sasac from "./sasac.js";
 import sinopec from "./sinopec.js";
 
 export const ADAPTERS: SourceAdapter[] = [
   chinaMobile, // 一手源：中国移动集团及所属单位
   cmb,         // 一手源：招商银行总分行、信用卡中心及科技子公司
-  sasac,       // 官方聚合源：国务院国资委人事招聘公告
   iguopin,     // 综合源：国聘网
   ncss,        // 综合源：24365 国家大学生就业服务平台
   sinopec,     // 候选一手源：接口已接通，当前在招列表为空

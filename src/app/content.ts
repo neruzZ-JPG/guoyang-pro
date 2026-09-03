@@ -111,7 +111,7 @@ export const PLAN_ROWS = [
 
 export const PRODUCT_STATS = [
   { value: "158+", label: "参考企业" },
-  { value: "5", label: "启用数据源" },
+  { value: "4", label: "启用数据源" },
   { value: "18+", label: "筛选维度" },
 ];
 

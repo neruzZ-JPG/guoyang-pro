@@ -19,7 +19,6 @@
    - 生产：`raw/enterprises/*.json` → `npx tsx src/ingest-enterprises.ts` → `roster.json`
 2. **时变数据(在招岗位)→ 运行时实时拉取**(适配器，不预存)
    - 岗位像大厂一样每天开/关，快照会过期，故走 job-pro 式实时适配器
-   - 国资委“人事招聘”栏目按近 180 天公告接入；它是公告级而非逐岗位数据，缺失字段不得猜测
    - `data/positions/*.json.gz` 只是**可选的离线快照**(`--offline` 用)，非主路径
    - 成功结果写入 `~/.guoyangpro/cache/positions.json`；实时源全失败时只允许回退到 24 小时内缓存
    - `--cache-only` 显式只读 24 小时缓存；`--offline` 只读随包快照，二者语义不得混淆
