@@ -51,7 +51,8 @@ Usage: guoyang-pro <verb> [flags]
                   --cache-only  仅查询24小时内实时缓存(不联网)
                   --offline  仅用本地快照(不联网),--year <年> 指定快照年份
   detail        岗位详情  --id <id>  [--year <离线快照年>]
-                  缓存未命中时按来源实时查询详情(当前支持国聘裸ID/iguopin:ID)
+                  缓存未命中时按来源实时查询详情
+                  (支持国聘裸ID/iguopin:ID 和 sasac:公告ID)
 
 规划:
   recommend     冲/稳/保(启发式估算:梯队+学历门槛 vs 院校层级+学历)

@@ -130,6 +130,10 @@ export default function Home() {
                 <span><i /> 招商银行官方招聘</span>
                 <b>在线</b>
               </div>
+              <div className="gp-source-row">
+                <span><i /> 国务院国资委人事招聘</span>
+                <b>在线</b>
+              </div>
               <div className="gp-terminal-rule" />
               <p className="gp-terminal-command">
                 <span>$</span> guoyang-pro search

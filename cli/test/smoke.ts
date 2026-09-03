@@ -39,6 +39,14 @@ import {
   parseRecord as parseSinopec,
   responseError as sinopecResponseError,
 } from "../src/adapters/sinopec.js";
+import {
+  announcementToPosition as sasacAnnouncementToPosition,
+  default as sasacAdapter,
+  enterpriseNameFromTitle as sasacEnterpriseNameFromTitle,
+  listingPageUrl as sasacListingPageUrl,
+  parseDetailPage as parseSasacDetailPage,
+  parseListingPage as parseSasacListingPage,
+} from "../src/adapters/sasac.js";
 import csgAdapter from "../src/adapters/csg.js";
 import { fetchPagedSource } from "../src/adapters/adapter-kit.js";
 import { ADAPTERS, liveAdapters } from "../src/adapters/index.js";
@@ -217,6 +225,14 @@ const ncssMixed = parseNcss({
   jobId: "ncss-mixed",
 });
 check("24365: 混合招聘公告标 unknown", ncssMixed?.recruit_type === "unknown");
+check("招聘类型推断: 高校精英招募按校招", (
+  parseNcss({
+    recName: "示例国企",
+    jobName: "2027届高校精英招募",
+    recProperty: "国有企业",
+    jobId: "ncss-campus-talent",
+  })?.recruit_type === "campus"
+));
 check("24365: 非法发布时间不抛异常", parseNcss({
   recName: "示例国企",
   jobName: "岗位",
@@ -255,16 +271,24 @@ const iguopinMissingSalary = parseRecord({
 });
 check("国聘: 缺失薪资不伪装面议", iguopinMissingSalary?.salary_ref === undefined);
 
-const [iguopinBadLimit, ncssBadLimit, chinaMobileBadLimit, cmbBadLimit] = await Promise.all([
+const [
+  iguopinBadLimit,
+  ncssBadLimit,
+  chinaMobileBadLimit,
+  cmbBadLimit,
+  sasacBadLimit,
+] = await Promise.all([
   iguopinAdapter.fetch({ limit: 100, scan_limit: 10 }),
   ncssAdapter.fetch({ limit: 100, scan_limit: 10 }),
   chinaMobileAdapter.fetch({ limit: 100, scan_limit: 10 }),
   cmbAdapter.fetch({ limit: 100, scan_limit: 10 }),
+  sasacAdapter.fetch({ limit: 100, scan_limit: 10 }),
 ]);
 check("国聘: 适配器自身拒绝 scan_limit < limit", !iguopinBadLimit.ok && iguopinBadLimit.scanned === 0);
 check("24365: 适配器自身拒绝 scan_limit < limit", !ncssBadLimit.ok && ncssBadLimit.scanned === 0);
 check("中国移动: 适配器自身拒绝 scan_limit < limit", !chinaMobileBadLimit.ok && chinaMobileBadLimit.scanned === 0);
 check("招商银行: 适配器自身拒绝 scan_limit < limit", !cmbBadLimit.ok && cmbBadLimit.scanned === 0);
+check("国资委: 适配器自身拒绝 scan_limit < limit", !sasacBadLimit.ok && sasacBadLimit.scanned === 0);
 
 const chinaMobileParsed = parseChinaMobile({
   id: "cm-1",
@@ -324,7 +348,54 @@ check("中国石化候选: 官方字段保守映射", sinopecParsed?.recruit_typ
 check("中国石化候选: 薪资带来源提示", sinopecParsed?.salary_ref?.includes("来源:中国石化招聘") === true);
 check("中国石化候选: 严格响应 success", !!sinopecResponseError({ success: false, code: "E", data: { records: [], total: 0 } }));
 check("候选源未实测真实在招前保持停用", !sinopecAdapter.live && !csgAdapter.live);
-check("注册表同时披露启用和候选源", ADAPTERS.length === 6 && liveAdapters().length === 4);
+
+const sasacList = parseSasacListingPage(`
+  <span id="comp_20742332">
+    <li>
+      <a href="../../../n2588035/n2588325/n2588350/c35848028/content.html"
+         title="中电信量子集团2027校园招聘正式启动">
+        中电信量子集团2027校园招聘正式启动
+      </a><span>[2026-09-02]</span>
+    </li>
+    <li><a href="https://example.com/topic">专题</a><span></span></li>
+  </span>
+  <script>var maxPageNum=95;</script>
+`);
+check("国资委: 列表解析公告与页数", (
+  sasacList.announcements.length === 1 &&
+  sasacList.announcements[0]?.id === "35848028" &&
+  sasacList.maxPages === 95
+));
+check("国资委: 详情链接回到官方栏目", (
+  sasacList.announcements[0]?.url ===
+  "http://www.sasac.gov.cn/n2588035/n2588325/n2588350/c35848028/content.html"
+));
+check("国资委: 物理分页倒序规则", (
+  sasacListingPageUrl(2, 95).endsWith("index_20742332_94.html")
+));
+const sasacAnnouncement = sasacAnnouncementToPosition(sasacList.announcements[0]!);
+check("国资委: 公告按明确文字识别校招", sasacAnnouncement.recruit_type === "campus");
+check("国资委: 公告不伪造岗位级字段", (
+  sasacAnnouncement.headcount === undefined &&
+  sasacAnnouncement.education === undefined &&
+  sasacAnnouncement.deadline === undefined
+));
+check("国资委: 从公告标题保守提取招聘主体", (
+  sasacEnterpriseNameFromTitle("中国物流所属华贸物流社会招聘公告") ===
+  "中国物流所属华贸物流"
+));
+const sasacDetail = parseSasacDetailPage(`
+  <title>中国兵器工业第二〇八研究所2027届高校精英招募－国务院国有资产监督管理委员会</title>
+  <meta name="contentid" content="35853996">
+  <meta name="source" content="中国兵器工业集团有限公司">
+  <meta name="publishdate" content="2026-09-03">
+`, "35853996");
+check("国资委: 详情页优先采用官方文章来源", (
+  sasacDetail?.enterprise_name === "中国兵器工业第二〇八研究所" &&
+  sasacDetail.remarks?.includes("文章来源:中国兵器工业集团有限公司") === true &&
+  sasacDetail.posted_at === "2026-09-03"
+));
+check("注册表同时披露启用和候选源", ADAPTERS.length === 7 && liveAdapters().length === 5);
 
 const partialPaged = await fetchPagedSource({
   source: "fixture-paged",

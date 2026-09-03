@@ -99,7 +99,9 @@ export function inferRecruitType(text?: string): RecruitType {
   const t = text ?? "";
   const matches: RecruitType[] = [];
   if (/实习|intern/i.test(t)) matches.push("intern");
-  if (/校园招聘|校招|应届|毕业生|管培生|春招|秋招/.test(t)) matches.push("campus");
+  if (
+    /校园招聘|校招|应届|毕业生|20\d{2}届|高校精英招募|管培生|春招|秋招|春季招聘|秋季招聘/.test(t)
+  ) matches.push("campus");
   if (/社会招聘|社招|成熟人才/.test(t)) matches.push("social");
   return matches.length === 1 ? matches[0] : "unknown";
 }
